@@ -11,7 +11,16 @@ const PIP = 100, BISCUIT = 200;
 const house = { id: 77, me: PIP, clock: 2, nextSeq: 1, records: new Map() };
 const settings = { sleep: 10, invert: 0, time: 0 };
 let pet = { look: '10000', name: 'Pip' }, badges = ['hello.bmp'], timetable = ['Mon,09:00,10:00,Maths,B12'];
-let upload = null, body = null;
+let upload = null, body = null, exp = 0;
+// The Pet's parts and what they cost, read from the firmware's own files.
+const partsSrc = readFileSync('src/apps/pet/parts.h', 'utf8'), logicSrc = readFileSync('src/apps/pet/pet_logic.h', 'utf8');
+const PARTS = ['BODIES', 'EYES', 'MOUTHS', 'HATS', 'EXTRAS'].map(sec => {
+  const start = partsSrc.indexOf(`PetPart ${sec}[]`), end = partsSrc.indexOf('\n};', start);
+  return [...partsSrc.slice(start, end).matchAll(/\{"([^"]+)", \{/g)].map(m => m[1]);
+});
+const LAYER = { BODY: 0, EYES_LAYER: 1, MOUTH: 2, HAT: 3, EXTRA: 4 };
+const UNLOCKS = [...logicSrc.matchAll(/\{(BODY|EYES_LAYER|MOUTH|HAT|EXTRA), (\d+), (\d+), "/g)].map(m => ({ layer: LAYER[m[1]], part: +m[2], exp: +m[3] }));
+const need = (layer, part) => (UNLOCKS.find(u => u.layer === layer && u.part === part) || { exp: 0 }).exp;
 
 function memberHex(seq, origin, ver, text) {
   const b = Buffer.alloc(61);
@@ -41,6 +50,12 @@ function handle(line, out) {
     house.clock = Math.max(house.clock, v) + 1;
     const b = Buffer.from(hex, 'hex');
     if (b.readUInt32LE(4) === house.me) house.nextSeq = Math.max(house.nextSeq, b.readUInt16LE(2));
+    // A chore this Pet did: EXP, as the X4 does (house/store.cpp).
+    if (b[0] === 2 && b.readUInt32LE(28) === house.me && b.readUInt32LE(12) === house.me) {
+      const before = old && Buffer.from(old, 'hex');
+      if (!before || before.readUInt32LE(28) !== house.me || before.readUInt32LE(32) !== b.readUInt32LE(32))
+        exp += before && b.readUInt32LE(32) <= before.readUInt32LE(24) ? 15 : 10;
+    }
     if (!old) { house.records.set(k, hex); return out.push('OK H PUT 1'); }
     const [ov, oe] = verOf(old);
     if (v > ov || (v === ov && e > oe)) { house.records.set(k, hex); return out.push('OK H PUT 2'); }
@@ -52,6 +67,10 @@ function handle(line, out) {
   if (line === 'G') return out.push(`OK G sleep=${settings.sleep} invert=${settings.invert} time=${settings.time} version=mock`);
   if (line.startsWith('G SET ')) { const [, , k, v] = line.split(' '); settings[k] = +v; return out.push('OK G SET'); }
   if (line === 'P GET') return out.push(`OK P ${pet.look} ${Buffer.from(pet.name).toString('hex')}`);
+  if (line === 'P PARTS') {
+    PARTS.forEach((names, layer) => names.forEach((n, i) => out.push(`PP ${layer} ${i} ${need(layer, i)} ${Buffer.from(n).toString('hex')}`)));
+    return out.push('OK P PARTS ' + exp);
+  }
   if (line.startsWith('P SET ')) { const [, , look, name] = line.split(' '); pet = { look, name: Buffer.from(name || '', 'hex').toString() }; return out.push('OK P SET'); }
   if (line === 'L') { badges.forEach(b => out.push('F ' + b)); return out.push('OK L'); }
   if (line.startsWith('B ')) { const [, name, bytes] = line.split(' '); upload = { name, left: +bytes }; return out.push('OK B'); }

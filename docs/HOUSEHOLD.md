@@ -65,6 +65,26 @@ device.
   home screen meanwhile.
 - On a reminder's day it says so ("Bin day today!").
 
+## Earning cosmetics
+
+Every chore your Pet does earns it EXP: 10, or 15 when it's done by its due day (marked done on the X4 or in the web
+app). Each 50 EXP is a level (on the Pet screen's header). EXP unlocks dress-up parts:
+
+| Part | EXP |
+|---|---|
+| Apron | 30 |
+| Wizard hat | 60 |
+| Feather duster | 100 |
+| Chef hat | 150 |
+| Medal | 250 |
+
+Everything else is free from the start, including the **bunny lad**: the Bunny body, the backwards **Cap** (its ears
+poke through) and the Bow tie. Parts not earned yet are skipped in dress-up (Pet, B), and refused if set over USB or
+from the web app. When one unlocks, the Pet says so ("Unlocked: Wizard hat! Dress me up"). The web app's Settings has
+the same dress-up, with locked parts greyed out and a **Bunny lad** button that puts the outfit on in one go.
+
+EXP is kept on each X4 (it's that Pet's own); it isn't shared with the household yet.
+
 ## The time
 
 Chores need the date. A device whose clock isn't set takes the time from a roommate's at Sync. The X4 has no clock

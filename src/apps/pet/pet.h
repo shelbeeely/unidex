@@ -5,6 +5,10 @@
 uint32_t petLookBits();  // the saved look, as pet_logic.h packs it
 String petName();        // "" if none is set
 uint32_t petId();        // this device's Pet: a random number made once (meet.cpp); its id in the household too
+// EXP from chores (RoomiePet): unlocks dress-up parts (pet_logic.h's UNLOCKS). petAddExp passes on "Unlocked: ..."
+// as the Pet's news when it crosses one.
+uint32_t petExp();
+void petAddExp(uint32_t points);
 void petChanged();       // the website saved a new look or name: the Pet screen redraws
 enum class PetMood : uint8_t { Normal, Happy, Blink };
 // A Pet's look, scale x 32 px, its top left at x0, y0 (parts off the screen are skipped); Happy and Blink swap in
@@ -21,5 +25,7 @@ void petDrawBubble(const char *text, int16_t cx, int16_t bottom);
 // The website's Tools page (site/pet.js) talks to these over USB. Called from usbsync for every line starting
 // with "P "; returns false if it isn't one of them.
 //   P GET                        -> "OK P <look, hex> <name, hex>"
-//   P SET <look hex> <name hex>  -> "OK P SET" or "ERR"  (name: up to 12 printable characters; empty = no name)
+//   P SET <look hex> <name hex>  -> "OK P SET" or "ERR"  (name: up to 12 printable characters; empty = no name;
+//                                   parts not earned yet are left at the default)
+//   P PARTS                      -> "PP <layer> <index> <EXP needed> <hex name>" per part, "OK P PARTS <EXP>"
 bool petUsb(const char *line);

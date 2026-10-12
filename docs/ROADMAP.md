@@ -79,7 +79,12 @@ X4 managed from a browser over USB or the X4's own WiFi, with the household rule
 - **Monsters:** overdue chores spawn creatures on everyone's Pet screen. Trash chores bring Stinky Trash Monsters; cleaning chores bring Dust Bunnies. More days late means more of them, and finishing the chore clears them away. New pixel art goes in the style of `parts.h`.
 - **The celebration:** checking off a task plays a short pixel animation (3–4 fast-refresh frames, about 2 s), then the completion goes out in the next listen window, or right away to a hub.
 
-## Phase 5: pet progression
+## Phase 5: pet progression (started)
+
+Done so far: EXP for chores (10, 15 on time), levels every 50 EXP, and earned parts (Apron 30, Wizard hat 60, Feather
+duster 100, Chef hat 150, Medal 250); the free Cap makes the bunny lad (docs/HOUSEHOLD.md). Still to do below: EXP
+from the shared done-log (so it's the same on every device), evolution, the Harmony Aura and streak cosmetics.
+
 
 - **EXP:** each chore done gives its weight in EXP to the Pet that did it, worked out from the shared done-log, so it's the same on every device and can't be inflated locally. On-time completions give a bonus.
 - **Levels and evolution:** Pets grow through stages (Hatchling, Housemate, Guardian) at EXP thresholds. Each stage adds art (size, a cape, a crest), so a Guardian looks the part.

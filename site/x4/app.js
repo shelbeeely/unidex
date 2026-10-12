@@ -328,8 +328,8 @@ const VIEWS = {
     const s = info.settings;
     return `<h2>Settings</h2>
       <div class="card"><div class="title">Your Pet</div><form class="add" data-form="petName">
-        <label>Name<input type="text" name="name" maxlength="12" value="${esc(info.pet.name || '')}"></label><button class="b p">Save</button></form>
-        <p class="note">Dress it up on the X4 (Pet, B).</p></div>
+        <label>Name<input type="text" name="name" maxlength="12" value="${esc(info.pet.name || '')}"></label><button class="b p">Save</button></form></div>
+      ${dressUp()}
       <div class="card"><div class="title">The X4</div>
         <form class="add" data-form="settings"><label>Sleep after<select name="sleep">${[10, 20, 30, 60].map(v =>
           `<option value="${v}"${+s.sleep === v ? ' selected' : ''}>${v} s</option>`).join('')}</select></label>
@@ -342,6 +342,30 @@ const VIEWS = {
         <button class="b" data-act="leave">Leave the household</button></div>` : ''}`;
   },
 };
+
+// ---- Dress-up: one choice per layer; parts not earned yet (EXP from chores) are shown locked.
+const LAYERS = ['Body', 'Eyes', 'Mouth', 'Hat', 'Extra'];
+const BUNNY_LAD = { Body: 'Bunny', Hat: 'Cap', Extra: 'Bow tie' };
+const lookParts = look => LAYERS.map((_, i) => (parseInt(look || '0', 16) >> (4 * i)) & 15);
+const lookHex = parts => parts.reduce((v, p, i) => v | (p << (4 * i)), 0).toString(16).padStart(5, '0');
+
+function dressUp() {
+  const exp = info.exp, parts = lookParts(info.pet.look), level = 1 + Math.floor(exp / 50);
+  const next = info.parts.filter(p => p.exp > exp).sort((a, b) => a.exp - b.exp)[0];
+  return `<div class="card"><div class="row"><div class="title">Dress up</div><span class="sub">Level ${level} · ${exp} EXP</span></div>
+    <p class="note">Chores earn EXP: 10 each, 15 on time.${next ? ` Next: ${esc(next.name)} at ${next.exp} EXP.` : ' Everything earned!'}</p>
+    <form class="add" data-form="look">${LAYERS.map((name, layer) => `<label>${name}<select name="l${layer}">${info.parts
+      .filter(p => p.layer === layer).map(p => `<option value="${p.index}"${p.index === parts[layer] ? ' selected' : ''}${p.exp > exp ? ' disabled' : ''}>${esc(p.name)}${p.exp > exp ? ' (' + p.exp + ' EXP)' : ''}</option>`).join('')}</select></label>`).join('')}
+      <button class="b p">Wear it</button></form>
+    <button class="b" data-act="bunnyLad">Bunny lad</button> <span class="sub">Bunny, cap and bow tie</span></div>`;
+}
+
+async function setLook(parts) {
+  ok(await run(`P SET ${lookHex(parts)} ${toHex(enc.encode(info.pet.name || ''))}`), 'OK P SET');
+  await readExtras();
+  render();
+  toast('Your Pet is wearing it (the X4 shows it on the Pet screen)');
+}
 
 // The way to pay member `m`: their request for `payer` (pasted on their phone or here) or their $cashtag link.
 function payLink(m, pence, payer) {
@@ -389,7 +413,13 @@ const ACTIONS = {
     if (!confirm('Leave the household on this X4? The others keep it.')) return;
     ok(await run('H LEAVE'), 'OK H LEAVE'); await readHouse(); render();
   },
-  done: d => change(() => wasm.chore_done(+d.o, +d.s, today().day), 'Done! Your Pet is proud'),
+  done: async d => {
+    const before = info.exp;
+    await change(() => wasm.chore_done(+d.o, +d.s, today().day));
+    await readExtras();
+    render();
+    toast(info.exp > before ? `Done! +${info.exp - before} EXP for your Pet` : 'Done!');
+  },
   toggle: d => change(() => wasm.toggle_item(+d.o, +d.s)),
   remove: d => confirm('Remove it for everyone (at the next Sync)?') && change(() => wasm.remove_record(+d.o, +d.s), 'Removed'),
   clearBought: () => change(() => recs(KIND.ITEM).filter(i => i.a).every(i => wasm.remove_record(i.origin, i.seq)), 'Cleared'),
@@ -420,6 +450,14 @@ const ACTIONS = {
     for (const l of lines) c = crc32(enc.encode(l + '\n'), c);
     ok(await run('W ' + lines.length + ' ' + c, ...lines), 'OK W');
     toast('Timetable saved');
+  },
+  bunnyLad: () => {
+    const parts = lookParts(info.pet.look);
+    for (const [layer, name] of Object.entries(BUNNY_LAD)) {
+      const p = info.parts.find(x => x.layer === LAYERS.indexOf(layer) && x.name === name);
+      if (p) parts[p.layer] = p.index;
+    }
+    return setLook(parts);
   },
   setTime: async () => { ok(await run('T ' + Math.floor(Date.now() / 1000)), 'OK T'); await readExtras(); render(); toast('Clock set'); },
 };
@@ -457,6 +495,7 @@ const FORMS = {
     ok(await run(`P SET ${info.pet.look} ${toHex(enc.encode(name))}`), 'OK P SET');
     await readExtras(); render(); toast('Saved');
   },
+  look: f => setLook(LAYERS.map((_, i) => +f['l' + i].value)),
   settings: async f => {
     ok(await run('G SET sleep ' + f.sleep.value, 'G SET invert ' + f.invert.value));
     await readExtras(); render(); toast('Saved');
@@ -502,7 +541,12 @@ async function badgeFrom(file, style, light) {
 }
 
 async function readExtras() {
-  const r = await run('G', 'P GET', 'L', 'W GET');
+  const r = await run('G', 'P GET', 'P PARTS', 'L', 'W GET');
+  info.parts = r.filter(l => l.startsWith('PP ')).map(l => {
+    const [, layer, index, exp, name] = l.split(' ');
+    return { layer: +layer, index: +index, exp: +exp, name: fromHex(name) };
+  });
+  info.exp = +((reply(r, 'OK P PARTS ') || '').split(' ')[3] || 0);
   const g = reply(r, 'OK G ');
   info.settings = Object.fromEntries((g ? g.slice(5) : '').split(' ').map(kv => kv.split('=')));
   const p = (reply(r, 'OK P ') || 'OK P 0 ').split(' ');

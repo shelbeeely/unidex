@@ -17,6 +17,10 @@ void houseUpdateMe(); // this Pet's name and look onto its member record, if the
 const char *houseCurrency();  // "$"
 void houseFormatMoney(int32_t pence, char *out, size_t len);  // "$6.50"
 
+// A chore this device's Pet just did (on the X4 or through the web app): EXP for the Pet, 10, or 15 when it was done
+// by its due day. `before` is the chore as it was (nullptr if new). Nothing when it isn't this Pet's doing.
+void houseCreditChore(const house::Record *before, const house::Record &after);
+
 // The home screen's line, from what was last loaded (no card read).
 void houseStatus(char *out, size_t len);
 

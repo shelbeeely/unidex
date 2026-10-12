@@ -114,6 +114,31 @@ int main() {
   nameFromPlaces(places, name);
   check(name[0] == 0 && nameDoneAt(places, 0), "an empty name: B finishes straight away");
 
+  // Earned cosmetics.
+  bool unlocksExist = true;
+  for (const Unlock &u : UNLOCKS) unlocksExist &= u.part < partsOf(u.layer).count && u.exp > 0;
+  check(unlocksExist, "every earnable part exists");
+  check(expNeeded(BODY, 3) == 0 && strcmp(BODIES[3].name, "Bunny") == 0 && expNeeded(HAT, 6) == 0 &&
+            strcmp(HATS[6].name, "Cap") == 0 && strcmp(EXTRAS[3].name, "Bow tie") == 0 && expNeeded(EXTRA, 3) == 0,
+        "the bunny lad (Bunny, Cap, Bow tie) is free");
+  check(!unlocked(HAT, 7, 59) && unlocked(HAT, 7, 60), "the wizard hat unlocks at 60 EXP");
+  Look s0 = DEFAULT_LOOK;
+  s0.part[HAT] = 6;  // Cap
+  stepUnlocked(s0, HAT, 1, 0);
+  check(s0.part[HAT] == 0, "stepping on from the Cap with no EXP skips the locked hats, back to None");
+  s0.part[HAT] = 6;
+  stepUnlocked(s0, HAT, 1, 60);
+  check(s0.part[HAT] == 7, "with 60 EXP the wizard hat comes next");
+  Look worn = DEFAULT_LOOK;
+  worn.part[HAT] = 8, worn.part[EXTRA] = 7, worn.part[BODY] = 3;
+  const Look kept = onlyUnlocked(worn, 0);
+  check(kept.part[HAT] == DEFAULT_LOOK.part[HAT] && kept.part[EXTRA] == DEFAULT_LOOK.part[EXTRA] && kept.part[BODY] == 3,
+        "a look with parts not earned keeps only what is");
+  check(newlyUnlocked(20, 35) && strcmp(newlyUnlocked(20, 35)->what, "Apron") == 0 && !newlyUnlocked(35, 40),
+        "crossing 30 EXP unlocks the apron, once");
+  check(nextUnlock(0)->exp == 30 && nextUnlock(250) == nullptr, "the next thing to earn");
+  check(levelOf(0) == 1 && levelOf(49) == 1 && levelOf(50) == 2, "levels every 50 EXP");
+
   printf(failures ? "\n%d check(s) failed\n" : "\nall checks passed\n", failures);
   return failures ? 1 : 0;
 }

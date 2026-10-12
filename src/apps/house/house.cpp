@@ -871,10 +871,14 @@ static Redraw listButton(Event e) {
       launcherToast("Set the clock first");
       return Redraw::Partial;
     }
+    const Record before = *r;
+    const uint32_t expBefore = petExp();
     choreDone(h, *r, today);
+    houseCreditChore(&before, *r);
     houseSave();
     char text[48];
-    snprintf(text, sizeof text, "Done! %s is proud", petName().length() ? petName().c_str() : "Your Pet");
+    snprintf(text, sizeof text, "Done! +%lu EXP for %s", (unsigned long)(petExp() - expBefore),
+             petName().length() ? petName().c_str() : "your Pet");
     launcherToast(text);
     return Redraw::Partial;
   }

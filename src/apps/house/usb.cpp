@@ -45,7 +45,13 @@ bool houseUsb(const char *line) {
       return true;
     }
     if (r.origin == h.me && r.seq > h.nextSeq) h.nextSeq = r.seq;  // made in the web app as this device
-    out.printf("OK H PUT %d\n", (int)merge(h, r));
+    Record before;
+    const Record *old = nullptr;
+    for (int i = 0; i < h.count; i++)
+      if (sameKey(h.r[i], r)) before = h.r[i], old = &before;
+    const Merge m = merge(h, r);
+    if (m == ADDED || m == UPDATED) houseCreditChore(old, r);  // a chore done in the web app earns EXP too
+    out.printf("OK H PUT %d\n", (int)m);
   } else if (strcmp(cmd, "SAVE") == 0) {
     houseSave();
     out.println("OK H SAVE");

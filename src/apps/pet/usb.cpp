@@ -42,11 +42,24 @@ bool petUsb(const char *line) {
       usbOut().println("ERR");
       return true;
     }
-    storagePutInt("pet_look", pet::pack(pet::unpack(look)));  // parts that don't exist fall back to the default
+    // Parts that don't exist, or haven't been earned yet, fall back to the default.
+    storagePutInt("pet_look", pet::pack(pet::onlyUnlocked(pet::unpack(look), petExp())));
     if (name.length()) storagePutString("pet_name", name.c_str());
     else storageRemoveKey("pet_name");
     petChanged();
     usbOut().println("OK P SET");
+  } else if (strcmp(cmd, "PARTS") == 0) {
+    // Every part, for the web app's dress-up: "PP <layer> <index> <EXP needed, 0 free> <hex name>", then
+    // "OK P PARTS <EXP>".
+    for (int layer = 0; layer < pet::LAYERS; layer++) {
+      const pet::LayerParts lp = pet::partsOf(layer);
+      for (int i = 0; i < lp.count; i++) {
+        usbOut().printf("PP %d %d %u ", layer, i, (unsigned)pet::expNeeded(layer, i));
+        for (const char *c = lp.parts[i].name; *c; c++) usbOut().printf("%02x", (uint8_t)*c);
+        usbOut().print('\n');
+      }
+    }
+    usbOut().printf("OK P PARTS %lu\n", (unsigned long)petExp());
   } else {
     usbOut().println("ERR");
   }

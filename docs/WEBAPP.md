@@ -43,7 +43,7 @@ when you leave the X4's hotspot.
 |---|---|
 | `H DUMP`, `H PUT <hex>`, `H SAVE`, `H START`, `H LEAVE` | The household (`src/apps/house/usb.h`) |
 | `G`, `G SET sleep <s>`, `G SET invert <0/1>` | Settings |
-| `P GET`, `P SET <look> <name hex>` | The Pet's name (and look) |
+| `P GET`, `P SET <look> <name hex>`, `P PARTS` | The Pet's name and look; every part with the EXP it needs, and the Pet's EXP |
 | `T <unix>` | Set the clock from the phone or computer |
 | `L`, `B ...` + `D ...`, `BX <name>` | List, upload and delete badges |
 | `W GET`, `W <count> <crc32>` + lines | Read and replace the timetable |

@@ -60,6 +60,62 @@ inline void stepPart(Look &l, int layer, int step) {
   l.part[layer] = (uint8_t)(((l.part[layer] + step) % n + n) % n);
 }
 
+// ---- Earned cosmetics (RoomiePet). Doing chores gives a Pet EXP (house/store.cpp: 10 a chore, 15 on time); these
+// parts unlock at the EXP shown. Every other part is free from the start (the Bunny body and the Cap among them:
+// the bunny lad needs nothing earned).
+struct Unlock {
+  uint8_t layer, part;
+  uint16_t exp;
+  const char *what;  // for "Unlocked: ..." (the part's name and layer)
+};
+static const Unlock UNLOCKS[] = {
+  {EXTRA, 5, 30, "Apron"},       {HAT, 7, 60, "Wizard hat"}, {EXTRA, 6, 100, "Feather duster"},
+  {HAT, 8, 150, "Chef hat"},     {EXTRA, 7, 250, "Medal"},
+};
+static const int UNLOCK_COUNT = sizeof UNLOCKS / sizeof UNLOCKS[0];
+
+// The EXP a part needs (0: free).
+inline uint16_t expNeeded(int layer, int part) {
+  for (const Unlock &u : UNLOCKS)
+    if (u.layer == layer && u.part == part) return u.exp;
+  return 0;
+}
+inline bool unlocked(int layer, int part, uint32_t exp) { return exp >= expNeeded(layer, part); }
+
+// stepPart, skipping parts not earned yet.
+inline void stepUnlocked(Look &l, int layer, int step, uint32_t exp) {
+  const int n = partsOf(layer).count;
+  for (int i = 0; i < n; i++) {
+    stepPart(l, layer, step);
+    if (unlocked(layer, l.part[layer], exp)) return;
+  }
+}
+
+// A look with any part not earned yet put back to the default (a look set over USB or the web app).
+inline Look onlyUnlocked(Look l, uint32_t exp) {
+  for (int i = 0; i < LAYERS; i++)
+    if (!unlocked(i, l.part[i], exp)) l.part[i] = DEFAULT_LOOK.part[i];
+  return l;
+}
+
+// The unlock reached between two EXP totals (the first of them), or nullptr.
+inline const Unlock *newlyUnlocked(uint32_t before, uint32_t after) {
+  for (const Unlock &u : UNLOCKS)
+    if (before < u.exp && after >= u.exp) return &u;
+  return nullptr;
+}
+
+// The next unlock above `exp`, or nullptr when everything is earned.
+inline const Unlock *nextUnlock(uint32_t exp) {
+  const Unlock *best = nullptr;
+  for (const Unlock &u : UNLOCKS)
+    if (u.exp > exp && (!best || u.exp < best->exp)) best = &u;
+  return best;
+}
+
+// Level from EXP: 1 at the start, then one every 50.
+inline int levelOf(uint32_t exp) { return 1 + exp / 50; }
+
 // A random look from any random number source (one call per layer).
 template <typename Rand> Look randomLook(Rand rand) {
   Look l;

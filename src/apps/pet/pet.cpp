@@ -44,6 +44,18 @@ static const char *const HEART[] = {  // beside its head while it's happy
 
 uint32_t petLookBits() { return storageGetInt("pet_look", pet::pack(pet::DEFAULT_LOOK)); }
 
+uint32_t petExp() { return storageGetInt("pet_exp", 0); }
+
+void petAddExp(uint32_t points) {
+  const uint32_t before = petExp(), after = before + points;
+  storagePutInt("pet_exp", after);
+  if (const pet::Unlock *u = pet::newlyUnlocked(before, after)) {
+    char news[64];
+    snprintf(news, sizeof news, "Unlocked: %s! Dress me up", u->what);
+    houseAddNews(news);
+  }
+}
+
 String petName() { return storageGetString("pet_name"); }
 
 static uint32_t changes;  // counts saves from the website; the screen and the home line each notice a new one
@@ -119,7 +131,9 @@ static bool householdSay(char *say, size_t len, HouseFeeling &feeling) {
 
 static void drawMain() {
   const String name = petName();
-  drawHeader("Pet", name.length() ? name.c_str() : nullptr);
+  char right[32];  // its name and level (chores give EXP: house/store.cpp)
+  snprintf(right, sizeof right, "%s%sLv %d", name.c_str(), name.length() ? "  " : "", pet::levelOf(petExp()));
+  drawHeader("Pet", right);
   pet::Look look = pet::unpack(petLookBits());
   char say[64];
   HouseFeeling feeling = HouseFeeling::Normal;
@@ -208,9 +222,9 @@ static Redraw onButton(Event e) {
     return Redraw::Full;
   } else if (e == Event::BShort && row == RANDOM_ROW) {
     if (devSeed()) srand(devSeed() + draft);
-    look = pet::randomLook(randomNumber);
+    look = pet::onlyUnlocked(pet::randomLook(randomNumber), petExp());
   } else if ((e == Event::BShort || e == Event::BLong) && row < pet::LAYERS) {
-    pet::stepPart(look, row, e == Event::BShort ? 1 : -1);
+    pet::stepUnlocked(look, row, e == Event::BShort ? 1 : -1, petExp());  // parts not earned yet are skipped
   } else {
     return Redraw::None;
   }
@@ -238,7 +252,9 @@ static Redraw onBack() {
 
 static void drawEdit() {
   const pet::Look look = pet::unpack(draft);
-  drawHeader("Dress up");
+  char exp[24];  // what chores have earned (parts not earned yet are skipped)
+  snprintf(exp, sizeof exp, "%lu EXP", (unsigned long)petExp());
+  drawHeader("Dress up", exp);
   drawAvatar(look, EDIT_SCALE, EDIT_AVATAR_Y);
   for (int r = 0; r < ROWS; r++) {  // which row of the editor this is: one dot each
     const int16_t x = display.width() / 2 + (r * 2 - (ROWS - 1)) * 5, y = EDIT_AVATAR_Y + pet::SIZE * EDIT_SCALE + 5;
