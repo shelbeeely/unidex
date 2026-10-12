@@ -230,6 +230,34 @@ int main() {
   pinned.pin = true;
   check(unpack(pack(pinned)).pin == (bool)UNIDEX_X4 && !unpack(pack(DEFAULT_LOOK)).pin,
         UNIDEX_X4 ? "the pin is saved with the look (the top bit)" : "the Waveshare board has no pin");
+  // Pride flags.
+  bool flagsOk = flags::COUNT <= 128 && flags::FLAGS[0].count == 0;
+  for (int f = 1; f < flags::COUNT; f++)
+    flagsOk &= strlen(flags::FLAGS[f].name) <= 12 && flags::FLAGS[f].count >= 1 && flags::FLAGS[f].count <= 7;
+  check(flagsOk, "every flag: a short name and 1 to 7 colours; they fit in the flag byte");
+  check(strcmp(flags::FLAGS[3].name, "Trans") == 0 && flags::colourAt(3, 0, 0, 20, 10) == 0x5BCEFA &&
+            flags::colourAt(3, 0, 5, 20, 10) == 0xFFFFFF,
+        "the trans flag: light blue at the top, white in the middle");
+  check(flags::colourAt(2, 0, 5, 26, 12) == 0xFFFFFF && flags::colourAt(2, 25, 0, 26, 12) == 0xE40303,
+        "the progress flag: the chevron's white tip at the left, red at the top right");
+  check(flags::colourAt(15, 0, 0, 26, 14) == 0xFFD800 && flags::colourAt(15, 13, 2, 26, 14) == flags::INTERSEX_RING,
+        "the intersex flag: yellow with a purple ring");
+  check(flags::indexOf(3 | flags::ON_PIN) == 3 && flags::indexOf(127) == 0, "a flag byte: the index, the pin bit");
+  int fMinX = 99, fMaxX = -1, fMinY = 99, fMaxY = -1, fInk = 0;
+  flags::drawPin(1, [&](int x, int y, bool ink) {
+    fMinX = x < fMinX ? x : fMinX, fMaxX = x > fMaxX ? x : fMaxX, fMinY = y < fMinY ? y : fMinY, fMaxY = y > fMaxY ? y : fMaxY;
+    fInk += ink;
+  });
+  check(fMinX >= 0 && fMaxX < 64 && fMinY >= 48 && fMaxY < 64 && fInk > 40, "the flag pin fits on the chest");
+  int clashes = 0;
+  for (int f = 1; f < flags::COUNT; f++)  // neighbouring stripes look different, or the flag is a blur
+    if (flags::FLAGS[f].shape == flags::STRIPES)
+      for (int i = 1; i < flags::FLAGS[f].count; i++)
+        if (flags::FLAGS[f].colour[i] != flags::FLAGS[f].colour[i - 1] &&
+            flags::stripeTexture(f, i) == flags::stripeTexture(f, i - 1))
+          clashes++, printf("       %s: stripes %d and %d look the same in black and white\n", flags::FLAGS[f].name, i - 1, i);
+  check(clashes == 0, "neighbouring stripes look different in black and white");
+
 #if UNIDEX_X4
   check(strcmp(OUTFITS[22].name, "Suit") == 0 && strcmp(HATS[23].name, "Tiara") == 0 && strcmp(EXTRAS[30].name, "Carrot") == 0 &&
             strcmp(OUTFITS[13].name, "Maid dress") == 0 && strcmp(EXTRAS[25].name, "Spider") == 0,

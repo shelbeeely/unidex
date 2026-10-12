@@ -1,7 +1,7 @@
 // The RoomiePet page: example Pets, dress-up with pronouns and the pin, and the whole wardrobe, drawn from the same
-// parts as the X4 (x4/pet-art.js, generated from the firmware by tools/pet/export.py; x4/pin.js draws the pin).
-import { LAYERS, DRAW_ORDER, EXAMPLES, PRONOUNS, DROPS, RARITIES } from './x4/pet-art.js';
-import { drawPin } from './x4/pin.js';
+// parts as the X4 (x4/pet-art.js, generated from the firmware by tools/pet/export.py; x4/pin.js draws pins and flags).
+import { LAYERS, DRAW_ORDER, EXAMPLES, PRONOUNS, FLAGS, DROPS, RARITIES } from './x4/pet-art.js';
+import { drawPin, drawFlag, drawFlagInk, ON_PIN } from './x4/pin.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
@@ -9,7 +9,7 @@ const DEFAULT = [0, 0, 0, 0, 1, 0, 0];
 const ROWS = [6, 5, 3, 4, 0, 1, 2];  // as on the X4: clothes first
 const rarity = (layer, part) => (DROPS.find(d => d.layer === layer && d.part === part) || {}).rarity || 0;  // 0: a starter
 
-function draw(canvas, look, pronouns = '', pin = false) {
+function draw(canvas, look, pronouns = '', pin = false, flag = 0) {
   const ctx = canvas.getContext('2d'), s = canvas.width / 32;
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -22,13 +22,13 @@ function draw(canvas, look, pronouns = '', pin = false) {
       ctx.fillRect(x * s, y * s, s, s);
     }));
   }
-  if (pin) drawPin(ctx, pronouns, s);
+  if (pin) drawPin(ctx, pronouns, s, flag);
 }
 
-function canvas(look, pronouns, pin) {
+function canvas(look, pronouns, pin, flag) {
   const c = document.createElement('canvas');
   c.width = c.height = 128;
-  draw(c, look, pronouns, pin);
+  draw(c, look, pronouns, pin, flag);
   return c;
 }
 
@@ -38,13 +38,15 @@ for (const ex of EXAMPLES) {
   const b = document.createElement('button');
   b.className = 'pet';
   b.title = 'Try it on';
-  b.appendChild(canvas(ex.parts, ex.pronouns, ex.pin));
+  const flagByte = ex.flag | (ex.pin === 'flag' ? ON_PIN : 0);
+  b.appendChild(canvas(ex.parts, ex.pronouns, !!ex.pin, flagByte));
   const names = ROWS.slice(0, 4).map(l => ex.parts[l] ? LAYERS[l].parts[ex.parts[l]].name : null).filter(Boolean);
-  b.insertAdjacentHTML('beforeend', `<b>${esc(ex.pronouns)}</b><small>${esc(names.join(', '))}</small>`);
+  b.insertAdjacentHTML('beforeend', `<b>${esc(ex.pronouns)} · ${esc(FLAGS[ex.flag].name)}</b><small>${esc(names.join(', '))}</small>`);
   b.onclick = () => {
     look = [...ex.parts];
     pronouns = ex.pronouns;
-    $('tryPin').checked = ex.pin;
+    flag = ex.flag;
+    $('tryPin').value = ex.pin || 'off';
     update();
     $('tryPet').scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
@@ -53,7 +55,7 @@ for (const ex of EXAMPLES) {
 
 // ---- Dress up: a picker a layer, the pronouns and the pin.
 
-let look = [...DEFAULT], pronouns = 'they/them';
+let look = [...DEFAULT], pronouns = 'they/them', flag = 1;
 const pickers = ROWS.map(layer => {
   const label = document.createElement('label');
   label.textContent = LAYERS[layer].name;
@@ -66,15 +68,34 @@ const pickers = ROWS.map(layer => {
 });
 for (const p of ['', ...PRONOUNS]) $('tryPronouns').add(new Option(p || 'None', p));
 $('tryPronouns').onchange = () => { pronouns = $('tryPronouns').value; update(); };
+FLAGS.forEach((f, i) => $('tryFlag').add(new Option(f.name, i)));
+$('tryFlag').onchange = () => { flag = +$('tryFlag').value; update(); };
 $('tryPin').onchange = update;
 function update() {
-  draw($('tryPet'), look, pronouns, $('tryPin').checked);
+  const pin = $('tryPin').value;
+  draw($('tryPet'), look, pronouns, pin !== 'off', flag | (pin === 'flag' ? ON_PIN : 0));
   for (const [layer, sel] of pickers) sel.value = look[layer];
   $('tryPronouns').value = pronouns;
+  $('tryFlag').value = flag;
 }
 $('random').onclick = () => { look = LAYERS.map(l => Math.floor(Math.random() * l.parts.length)); update(); };
 $('reset').onclick = () => { look = [...DEFAULT]; update(); };
 update();
+
+// ---- Pride flags: each in colour, and as the X4 draws it.
+
+FLAGS.forEach((f, i) => {
+  if (!i) return;
+  const card = document.createElement('div');
+  card.className = 'card';
+  const colour = document.createElement('canvas'), ink = document.createElement('canvas');
+  colour.width = 104, colour.height = 64, ink.width = 26 * 4, ink.height = 14 * 4;
+  drawFlag(colour.getContext('2d'), i, 0, 0, 104, 64);
+  drawFlagInk(ink.getContext('2d'), i, 0, 0, 26, 14, 4);
+  card.append(colour, ink);
+  card.insertAdjacentHTML('beforeend', `<b>${esc(f.name)}</b>`);
+  $('flags').appendChild(card);
+});
 
 // ---- The wardrobe: every part on the plain blob, by layer.
 

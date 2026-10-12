@@ -17,11 +17,12 @@
 static const int MAIN_SCALE = 4, EDIT_SCALE = 3;  // 128 px on the main screen, 96 px while editing
 static const int16_t EDIT_AVATAR_Y = CONTENT_TOP + 4, ROW_Y = HINTS_TOP - 14;
 // The editor's rows: a layer (0 and up), or one of these. On the X4 (RoomiePet) clothes come first, and there are
-// rows for the Pet's pronouns (pronouns.h's PRESETS) and whether it wears its pronoun pin.
-enum : int8_t { PRONOUNS_ROW = -1, NAME_ROW = -2, RANDOM_ROW = -3, DONE_ROW = -4, PIN_ROW = -5 };
+// rows for the Pet's pronouns (pronouns.h's PRESETS), its pride flag (flags.h) and its pin (off, the pronouns or
+// the flag).
+enum : int8_t { PRONOUNS_ROW = -1, NAME_ROW = -2, RANDOM_ROW = -3, DONE_ROW = -4, PIN_ROW = -5, FLAG_ROW = -6 };
 #if UNIDEX_X4
 static const int8_t ROW_OF[] = {pet::OUTFIT, pet::HAIR,  pet::HAT,    pet::EXTRA, pet::BODY,  pet::EYES_LAYER,
-                                pet::MOUTH,  PRONOUNS_ROW, PIN_ROW, NAME_ROW,   RANDOM_ROW, DONE_ROW};
+                                pet::MOUTH,  PRONOUNS_ROW, FLAG_ROW, PIN_ROW, NAME_ROW, RANDOM_ROW, DONE_ROW};
 #else
 static const int8_t ROW_OF[] = {pet::BODY, pet::EYES_LAYER, pet::MOUTH, pet::HAT,  pet::EXTRA,
                                 pet::HAIR, pet::OUTFIT,     NAME_ROW,   RANDOM_ROW, DONE_ROW};
@@ -102,38 +103,52 @@ String petName() { return storageGetString("pet_name"); }
 
 String petPronouns() { return UNIDEX_X4 ? storageGetString("pet_pronouns") : String(); }
 
-// The pronoun pin over a Pet drawn at `scale` with its top left at x0, y0 (pronouns.h draws it at half a Pet pixel,
-// so it needs a scale of 2 or more).
-static void drawPin(const char *pronouns, int scale, int16_t x0, int16_t y0) {
-  if (!pronouns || !*pronouns || scale < 2) return;
-  pronouns::drawPin(pronouns, [&](int x, int y, bool ink) {
+uint8_t petFlag() { return UNIDEX_X4 ? (uint8_t)storageGetInt("pet_flag", 0) : 0; }
+
+void petDrawFlag(uint8_t flag, int16_t x, int16_t y, int16_t w, int16_t h) {
+  const int f = flags::indexOf(flag);
+  if (!f) return;
+  display.drawRect(x - 1, y - 1, w + 2, h + 2, WHITE);  // a white rim keeps it clear of what's behind
+  flags::draw(f, w, h, [&](int px, int py, bool ink) { display.drawPixel(x + px, y + py, ink ? BLACK : WHITE); });
+}
+
+// The pin over a Pet drawn at `scale` with its top left at x0, y0: its flag (flags.h) when the flag byte says the pin
+// shows it, else the pronouns (pronouns.h). Both are drawn at half a Pet pixel, so it needs a scale of 2 or more.
+static void drawPin(const char *pronouns, uint8_t flag, int scale, int16_t x0, int16_t y0) {
+  if (scale < 2) return;
+  auto pixel = [&](int x, int y, bool ink) {
     const int16_t left = x * scale / 2, top = y * scale / 2;
     display.fillRect(x0 + left, y0 + top, (x + 1) * scale / 2 - left, (y + 1) * scale / 2 - top, ink ? BLACK : WHITE);
-  });
+  };
+  if ((flag & flags::ON_PIN) && flags::indexOf(flag)) flags::drawPin(flags::indexOf(flag), pixel);
+  else if (pronouns && *pronouns) pronouns::drawPin(pronouns, pixel);
 }
 
 static uint32_t changes;  // counts saves from the website; the screen and the home line each notice a new one
 
 void petChanged() { changes++; }
 
-void petDraw(uint32_t look, int scale, int16_t x0, int16_t y0, PetMood mood, const char *pronouns) {
+void petDraw(uint32_t look, int scale, int16_t x0, int16_t y0, PetMood mood, const char *pronouns, uint8_t flag) {
   pet::Look l = pet::unpack(look);
   if (mood == PetMood::Happy) l.part[pet::EYES_LAYER] = pet::HAPPY_EYES;
   pet::drawLook(l, mood == PetMood::Blink, [&](int x, int y, bool ink) {
     display.fillRect(x0 + x * scale, y0 + y * scale, scale, scale, ink ? BLACK : WHITE);
   });
-  if (l.pin) drawPin(pronouns, scale, x0, y0);
+  if (l.pin) drawPin(pronouns, flag, scale, x0, y0);
 }
 
-void petDrawTag(const char *name, int16_t cx, int16_t bottom) {
-  if (!name || !*name) return;
+void petDrawTag(const char *name, int16_t cx, int16_t bottom, uint8_t flag) {
+  const bool hasFlag = flags::indexOf(flag) != 0;
+  if ((!name || !*name) && !hasFlag) return;
   display.setFont(FONT_TINY);
-  const int16_t w = textWidth(name) + 8, h = 14, x = cx - w / 2, y = bottom - h;
+  const int16_t flagW = hasFlag ? 14 + (name && *name ? 4 : 0) : 0;
+  const int16_t w = (name ? textWidth(name) : 0) + 8 + flagW, h = 14, x = cx - w / 2, y = bottom - h;
   display.fillRoundRect(x - 1, y - 1, w + 2, h + 2, 4, WHITE);  // a white rim keeps it clear of what's behind
   display.fillRoundRect(x, y, w, h, 3, BLACK);
+  if (hasFlag) petDrawFlag(flag, x + 4, y + 3, 14, 8);  // the flag first, then the name
   display.setTextColor(WHITE);
-  display.setCursor(x + 4, y + 10);
-  display.print(name);
+  display.setCursor(x + 4 + flagW, y + 10);
+  if (name) display.print(name);
   display.setTextColor(BLACK);
 }
 
@@ -165,7 +180,7 @@ static void drawAvatar(const pet::Look &look, int scale, int16_t y0, bool eyesCl
   pet::drawLook(look, eyesClosed, [&](int x, int y, bool ink) {
     display.fillRect(x0 + x * scale, y0 + y * scale, scale, scale, ink ? BLACK : WHITE);
   });
-  if (look.pin) drawPin(petPronouns().c_str(), scale, x0, y0);
+  if (look.pin) drawPin(petPronouns().c_str(), petFlag(), scale, x0, y0);
 }
 
 static void save() { storagePutInt("pet_look", pet::pack(pet::unpack(draft))); }  // skips the write if unchanged
@@ -189,7 +204,11 @@ static void drawMain() {
   char right[48];  // its name, pronouns and level (chores give EXP: petChoreDone)
   snprintf(right, sizeof right, "%s%s%s%s%sLv %d", name.c_str(), pronouns.length() ? " (" : "", pronouns.c_str(),
            pronouns.length() ? ")" : "", name.length() || pronouns.length() ? "  " : "", pet::levelOf(petExp()));
-  drawHeader("Pet", fitText(right, display.width() - 40).c_str());
+  const uint8_t flag = petFlag();
+  const String shown = fitText(right, display.width() - (flags::indexOf(flag) ? 60 : 40));
+  drawHeader("Pet", shown.c_str());
+  display.setFont(FONT_SMALL);
+  petDrawFlag(flag, display.width() - MARGIN - textWidth(shown.c_str()) - 18, 7, 14, 9);  // before the name
   pet::Look look = pet::unpack(petLookBits());
   char say[64];
   HouseFeeling feeling = HouseFeeling::Normal;
@@ -288,8 +307,19 @@ static Redraw onButton(Event e) {
     if (*pronouns::PRESETS[at]) storagePutString("pet_pronouns", pronouns::PRESETS[at]);
     else storageRemoveKey("pet_pronouns");
     petChanged();
+  } else if ((e == Event::BShort || e == Event::BLong) && kind == FLAG_ROW) {
+    const uint8_t was = petFlag();
+    const int n = flags::COUNT, f = ((flags::indexOf(was) + (e == Event::BShort ? 1 : -1)) % n + n) % n;
+    storagePutInt("pet_flag", f | (was & flags::ON_PIN));
+    petChanged();
   } else if (e == Event::BShort && kind == PIN_ROW) {
-    look.pin = !look.pin;
+    // Off, then the pronouns, then the flag, then off again.
+    const uint8_t flag = petFlag();
+    const bool onFlag = look.pin && (flag & flags::ON_PIN);
+    if (!look.pin) look.pin = true, storagePutInt("pet_flag", flag & ~flags::ON_PIN);
+    else if (!onFlag) storagePutInt("pet_flag", flag | flags::ON_PIN);
+    else look.pin = false, storagePutInt("pet_flag", flag & ~flags::ON_PIN);
+    petChanged();
   } else if (e == Event::BShort && kind == RANDOM_ROW) {
     if (devSeed()) srand(devSeed() + draft);
     const bool pin = look.pin;
@@ -356,10 +386,18 @@ static void drawEdit() {
     const String pr = petPronouns();
     drawRight(pr.length() ? pr.c_str() : "none", ROW_Y);
     drawHints("next", "change", "previous");
+  } else if (kind == FLAG_ROW) {
+    display.print("Flag");
+    const int f = flags::indexOf(petFlag());
+    drawRight(f ? flags::FLAGS[f].name : "none", ROW_Y);
+    if (f) petDrawFlag(petFlag(), display.width() - MARGIN - textWidth(flags::FLAGS[f].name) - 20, ROW_Y - 9, 14, 9);
+    drawHints("next", "change", "previous");
   } else if (kind == PIN_ROW) {
-    display.print("Pronoun pin");
-    drawRight(!look.pin ? "off" : petPronouns().length() ? "on" : "on (no pronouns)", ROW_Y);
-    drawHints("next", look.pin ? "take off" : "put on", "");
+    display.print("Pin");
+    const bool onFlag = petFlag() & flags::ON_PIN;
+    drawRight(!look.pin ? "off" : onFlag ? (flags::indexOf(petFlag()) ? "flag" : "flag (none set)")
+                                         : petPronouns().length() ? "pronouns" : "pronouns (none set)", ROW_Y);
+    drawHints("next", "change", "");
   } else if (kind == NAME_ROW) {
     display.print("Name");
     const String name = petName();

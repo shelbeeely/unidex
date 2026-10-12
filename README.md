@@ -10,7 +10,7 @@ drop for keeping the house up.
   <a href="LICENSE"><img height="36" alt="Licence: PolyForm Noncommercial" src="https://img.shields.io/badge/licence-PolyForm%20Noncommercial-black?style=for-the-badge"></a>
 </p>
 
-![Eight Pets in different outfits, some wearing pronoun pins: SHE/HER, THEY/THEM, HE/HIM and ANY](docs/roomiepet-pets.png)
+![Eight Pets in different outfits, wearing pronoun pins (SHE/HER, THEY/THEM) and pride flag pins (bi, gay, progress, rainbow)](docs/roomiepet-pets.png)
 
 Every roommate has an [Xteink X4](docs/X4.md) on the fridge, a door or a desk, each with their own Pet. The Pets share
 a virtual household, and keeping it up is the game. It runs on the [FreeInk SDK](https://github.com/Free-Ink/freeink-sdk)
@@ -24,6 +24,7 @@ yet; what's next is in the [roadmap](docs/ROADMAP.md).
 | **Pets** | Your Pet is proud when you've done your chores, sulks when one is late, cheers your roommates on and passes on their news. Chores give it levels and, now and then, a gift. [More](docs/HOUSEHOLD.md#dress-up-pronouns-and-gifts) |
 | **Wardrobe** | Seven layers (body, eyes, mouth, hat, accessory, hair, outfit) and over 120 parts: 26 outfits, 18 hairstyles, 23 hats and 30 accessories, and a bunny lad. Dress up on the X4 (Pet, B) or with the web app's Pet designer. Everyday pieces are starters every Pet has; showy ones (halo, maid dress, lace dress, tiara...) are gifts. |
 | **Pronouns** | Set yours on the X4 or in the web app (a list, or anything up to 12 characters). They show beside your Pet's name, on its **pronoun pin** (a badge on its chest), on its name tag when it meets other Pets and in their friends lists, and on your household's Roommates. [More](docs/HOUSEHOLD.md#pronouns) |
+| **Pride flags** | Rainbow, progress, trans, nonbinary, bi, pan, lesbian, gay, ace, aro, aroace, genderfluid, genderqueer, agender and intersex. Your flag shows beside your Pet's name, on name tags and friends lists, on Roommates, and on a **flag pin** if you like. The X4 draws each colour as a black-and-white texture; the web app shows them in colour. [More](docs/HOUSEHOLD.md#pride-flags) |
 | **Gifts** | Nothing is bought or spent. Like loot from a game's NPC, a gift can drop after any chore: uncommon, rare or legendary, never a duplicate. The odds go up for a chore done on time, covering a roommate's turn, rescuing a late one, your first today and a streak of days, and a dry spell always ends with one. [More](docs/HOUSEHOLD.md#gifts) |
 | **Web app** | Manage the whole X4 from a browser: on a phone over the X4's own WiFi (House, *Manage on phone*), or on a computer over USB from the [website](https://forrest404.github.io/unidex/x4/). The household rules run in the browser as WebAssembly compiled from the device's own C++, so they can never disagree. [More](docs/WEBAPP.md) |
 
@@ -34,8 +35,15 @@ yet; what's next is in the [roadmap](docs/ROADMAP.md).
 
 </details>
 
+<details>
+<summary>The pride flags</summary>
+
+![The fifteen pride flags: rainbow, progress, trans, nonbinary, bi, pan, lesbian, gay, ace, aro, aroace, genderfluid, genderqueer, agender and intersex](docs/roomiepet-flags.png)
+
+</details>
+
 Build it with `pio run -e x4` (see [docs/X4.md](docs/X4.md)); the [website](https://forrest404.github.io/unidex/)
-shows example Pets, a dress-up with pronoun pins, the whole wardrobe and the odds of each gift.
+shows example Pets, a dress-up with pronoun and flag pins, the pride flags, the whole wardrobe and the odds of each gift.
 
 If RoomiePet is useful to you, a star on GitHub helps other people find it.
 

@@ -35,14 +35,15 @@ bool petUsb(const char *line) {
 #if UNIDEX_X4
     usbOut().print(' ');
     for (const char c : petPronouns()) usbOut().printf("%02x", (uint8_t)c);
+    usbOut().printf(" %02x", petFlag());
 #endif
     usbOut().print('\n');
   } else if (strncmp(cmd, "SET ", 4) == 0) {
     // "-" for no name (or no pronouns), so the pronouns after an empty name aren't taken for the name.
-    char lookHex[12] = "", nameHex[2 * MAX_NAME + 2] = "", pronounsHex[2 * pronouns::MAX + 2] = "";
+    char lookHex[12] = "", nameHex[2 * MAX_NAME + 2] = "", pronounsHex[2 * pronouns::MAX + 2] = "", flagHex[4] = "";
     String name, said;
     char *end;
-    const int n = sscanf(cmd + 4, "%11s %25s %25s", lookHex, nameHex, pronounsHex);
+    const int n = sscanf(cmd + 4, "%11s %25s %25s %3s", lookHex, nameHex, pronounsHex, flagHex);
     const unsigned long look = strtoul(lookHex, &end, 16);
     if (strcmp(nameHex, "-") == 0) nameHex[0] = 0;
     if (strcmp(pronounsHex, "-") == 0) pronounsHex[0] = 0;
@@ -62,6 +63,10 @@ bool petUsb(const char *line) {
       pronouns::clean(said.c_str(), clean);
       if (*clean) storagePutString("pet_pronouns", clean);
       else storageRemoveKey("pet_pronouns");
+    }
+    if (n > 3) {  // the pride flag byte (flags.h): its index, and 80 when the pin shows it
+      const unsigned long f = strtoul(flagHex, &end, 16);
+      storagePutInt("pet_flag", *end || f > 255 || (f & 0x7F) >= (unsigned long)flags::COUNT ? 0 : f);
     }
     houseUpdateMe();  // the household's member card takes the new name, look and pronouns
 #endif

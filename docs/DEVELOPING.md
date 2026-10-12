@@ -136,8 +136,9 @@ disappears while it sleeps.
   `site/pet-parts.js` and the X4 web app's `site/x4/pet-art.js` (`--check` says if it's out of date), then
   `python3 tools/pet/wardrobe_images.py` to redraw the README's example Pets and wardrobe pictures. New parts go after the old ones (the
   Waveshare board keeps only the parts it shipped with, `WAVESHARE_PARTS` in `pet_logic.h`); the example Pets are
-  `EXAMPLES` in `tools/pet/export.py`. Pronouns and the pronoun pin's 3x5 letters are `src/apps/pet/pronouns.h`
-  (`site/x4/pin.js` draws the same pin in the browser). The website's RoomiePet
+  `EXAMPLES` in `tools/pet/export.py`. Pronouns and the pronoun pin's 3x5 letters are `src/apps/pet/pronouns.h`,
+  pride flags `src/apps/pet/flags.h` (their colours, and the textures the X4 draws them with); `site/x4/pin.js`
+  draws the same pins and flags in the browser, from what `export.py` copies into `pet-art.js`. The website's RoomiePet
   page (`site/index.html`, the home page) draws from `site/x4/pet-art.js` by itself.
 - **Meet** (`meet.cpp`, rules in `meet_logic.h`): devices say hello over ESP-NOW about once a second (four times a
   second with someone nearby), each with a random radio address per session. Closeness is the signal strength both

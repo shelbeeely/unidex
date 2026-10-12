@@ -33,7 +33,10 @@
   .wardrobe { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; margin-bottom: 22px; }
   .wardrobe .pet { padding: 6px; }
   .wardrobe .pet b { font-size: 12px; }
-  .check { display: flex; flex-direction: row; gap: 8px; align-items: center; }
+  .flags { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; }
+  .flags .card { padding: 10px; text-align: center; margin: 0; }
+  .flags canvas { width: 100%; height: auto; image-rendering: pixelated; display: block; margin: 4px 0; border-radius: 3px; }
+  .flags b { font-size: 13px; }
   .gift { display: inline-block; margin-top: 2px; padding: 0 6px; border-radius: 999px; font-size: 11px; border: 1px solid #18181b; color: #18181b; }
   .gift.r2 { background: #18181b; color: #fff; }
   .gift.r3 { background: linear-gradient(90deg, #7c3aed, #db2777); border-color: transparent; color: #fff; }
@@ -80,17 +83,27 @@
 
   <section>
     <h2>Dress up</h2>
-    <p class="sub">Seven layers, drawn exactly as the X4 draws them (clothes under the face, hair under hats), plus the
-      pronoun pin.</p>
+    <p class="sub">Seven layers, drawn exactly as the X4 draws them (clothes under the face, hair under hats), plus a
+      pin with your pronouns or your pride flag.</p>
     <div class="try">
       <canvas id="tryPet" width="256" height="256"></canvas>
       <div>
         <div class="pickers" id="pickers"></div>
         <div class="pickers"><label>Pronouns<select id="tryPronouns"></select></label>
-          <label class="check"><input type="checkbox" id="tryPin" checked> Pronoun pin</label></div>
+          <label>Pride flag<select id="tryFlag"></select></label>
+          <label>Pin<select id="tryPin"><option value="off">No pin</option><option value="pronouns" selected>Pronoun pin</option><option value="flag">Flag pin</option></select></label></div>
         <div class="chips"><button class="secondary" id="random">Random</button><button class="secondary" id="reset">Start again</button></div>
       </div>
     </div>
+  </section>
+
+  <section>
+    <h2>Pride flags</h2>
+    <p class="sub">Pick a flag for your Pet: it shows beside its name, on its name tag when it meets other Pets and in
+      their friends lists, on your household's Roommates, and on its pin if you like. The X4's screen is black and
+      white, so it draws each colour as a texture (below each flag), and no two stripes next to each other look the
+      same.</p>
+    <div class="flags" id="flags"></div>
   </section>
 
   <section>

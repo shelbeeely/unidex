@@ -17,6 +17,7 @@
 #include "../../core/power.h"
 #include "../../core/storage.h"
 #include "../../core/theme.h"
+#include "../pet/flags.h"
 #include "../pet/pet.h"
 #include "phone.h"
 #include "../../core/hotspot.h"
@@ -146,14 +147,16 @@ static int totalRows() {
 
 // ---- Drawing
 
-static void drawRow(int slot, bool selected, const char *left, const char *right) {
+// A row: `left` (after a pride flag, for a roommate who has one), `right` at the right edge.
+static void drawRow(int slot, bool selected, const char *left, const char *right, uint8_t flag = 0) {
   const int16_t y = CONTENT_TOP + 3 + slot * ROW_H, baseline = y + ROW_H / 2 + 4;
   if (selected) display.fillRect(MARGIN - 4, y, display.width() - 2 * (MARGIN - 4), ROW_H - 2, BLACK);
   display.setTextColor(selected ? WHITE : BLACK);
   display.setFont(FONT_SMALL);
-  const int16_t rightW = right && *right ? textWidth(right) + 8 : 0;
-  display.setCursor(MARGIN, baseline);
-  display.print(fitText(left, display.width() - 2 * MARGIN - rightW));
+  const int16_t rightW = right && *right ? textWidth(right) + 8 : 0, flagW = flags::indexOf(flag) ? 19 : 0;
+  if (flagW) petDrawFlag(flag, MARGIN, baseline - 9, 14, 9);
+  display.setCursor(MARGIN + flagW, baseline);
+  display.print(fitText(left, display.width() - 2 * MARGIN - rightW - flagW));
   if (rightW) drawRight(right, baseline);
   display.setTextColor(BLACK);
 }
@@ -272,7 +275,7 @@ static void drawList() {
                tag ? "$" : "", tag ? tag : "");
       if (r.origin == h.me && !tag) strlcpy(right, "you, no $cashtag", sizeof right);
     }
-    drawRow(i - top, i == cursor, left, right);
+    drawRow(i - top, i == cursor, left, right, screen == ROOMMATES ? (uint8_t)r.d : 0);
   }
   if (screen == CHORES_LIST && !today) drawToast("Set the clock (Settings or Sync)");
   const bool onRecord = cursor < rowCount;

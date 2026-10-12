@@ -65,17 +65,18 @@ device.
   home screen meanwhile.
 - On a reminder's day it says so ("Bin day today!").
 
-## Dress-up, pronouns and gifts
+## Dress-up, pronouns, pride flags and gifts
 
 A Pet's look has seven layers: Body, Eyes, Mouth, Hat, Accessory, **Hair** and **Outfit**, from a wardrobe of over
 120 parts. It's drawn in this order: the body, its outfit, the face, the hair (a fringe can cover an eye), then hats
 and accessories, then the pronoun pin.
 
 - **On the X4:** Pet, B. The rows go Outfit, Hair, Hat, Accessory, Body, Eyes, Mouth (B: next, hold B: previous),
-  then **Pronouns**, **Pronoun pin** (B: put on / take off), Name, Random look and Done.
+  then **Pronouns**, **Flag** (your pride flag), **Pin** (B: off, then pronouns, then flag), Name, Random look and
+  Done.
 - **In the web app:** the **Pet** tab is the Pet designer: a live preview, a row a layer with ◀ and ▶, a strip of
   every piece in the layer you're on (tap one to put it on), Random, the name, your pronouns (a list, or Other... for
-  anything up to 12 characters), the pin, and **Wear it on the X4**. **Load from the X4** puts back what it's wearing.
+  anything up to 12 characters), your pride flag, the pin (none, pronouns or flag), and **Wear it on the X4**. **Load from the X4** puts back what it's wearing.
 
 The parts:
 
@@ -99,6 +100,20 @@ apostrophes) in the web app. They show:
 - on its name tag when it meets other Pets, and in their friends lists (Meet carries them);
 - on the household's **Roommates**, on every roommate's X4 and in the web app (the member card carries them, so they
   reach everyone at the next Sync).
+
+### Pride flags
+
+Rainbow, Progress, Trans, Nonbinary, Bi, Pan, Lesbian, Gay (MLM), Ace, Aro, Aroace, Genderfluid, Genderqueer,
+Agender and Intersex (`src/apps/pet/flags.h`). Pick one on the X4 (dress-up's Flag row) or in the web app. It shows:
+
+- before the Pet's name on its screen, and in dress-up;
+- on its **flag pin**, if the pin is set to show the flag rather than the pronouns;
+- on its name tag when it meets other Pets, and in their friends lists (Meet carries it);
+- on the household's **Roommates**, on every roommate's X4 and in the web app (the member card carries it in d).
+
+The X4's screen is black and white, so each colour becomes a texture as dark as it is (white, sparse dots, thin lines,
+a checker, diagonal lines, a dense grid, solid), and two stripes next to each other never get the same one; the
+intersex flag is its ring on plain paper. The web app and the website show the flags in colour.
 
 ### Gifts
 

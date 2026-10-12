@@ -29,16 +29,16 @@ function choreGift() {
 // Pronouns in a member card's b and c, as pronouns.h packs them: 5 bits a character, 6 to a number.
 const PR_CHARS = "abcdefghijklmnopqrstuvwxyz/- '";
 const packPronouns = p => [...p].slice(0, 12).reduce((v, ch, i) => { v[Math.floor(i / 6)] += (PR_CHARS.indexOf(ch) + 1) * 32 ** (i % 6); return v; }, [0, 0]);
-function memberHex(seq, origin, ver, text, pronouns = '', look = 0x10000) {
+function memberHex(seq, origin, ver, text, pronouns = '', look = 0x10000, flag = 0) {
   const b = Buffer.alloc(61);
   b[0] = 1; b.writeUInt16LE(seq, 2);
-  [origin, ver, origin, ver, look, ...packPronouns(pronouns), 0].forEach((v, i) => b.writeUInt32LE(v, 4 + 4 * i));
+  [origin, ver, origin, ver, look, ...packPronouns(pronouns), flag].forEach((v, i) => b.writeUInt32LE(v, 4 + 4 * i));
   b[36] = text.length; b.write(text, 37);
   return b.toString('hex');
 }
 const key = hex => { const b = Buffer.from(hex, 'hex'); return b.readUInt32LE(4) + ':' + b.readUInt16LE(2); };
 const verOf = hex => { const b = Buffer.from(hex, 'hex'); return [b.readUInt32LE(8), b.readUInt32LE(12)]; };
-for (const h of [memberHex(1, PIP, 1, 'Pip'), memberHex(1, BISCUIT, 2, 'Biscuit', 'they/them')]) house.records.set(key(h), h);
+for (const h of [memberHex(1, PIP, 1, 'Pip'), memberHex(1, BISCUIT, 2, 'Biscuit', 'they/them', 0x80010000, 0x83)]) house.records.set(key(h), h);
 
 function handle(line, out) {
   if (body) {  // W lines
@@ -73,17 +73,18 @@ function handle(line, out) {
   if (line === 'H LEAVE') { house.id = 0; house.records.clear(); return out.push('OK H LEAVE'); }
   if (line === 'G') return out.push(`OK G sleep=${settings.sleep} invert=${settings.invert} time=${settings.time} version=mock`);
   if (line.startsWith('G SET ')) { const [, , k, v] = line.split(' '); settings[k] = +v; return out.push('OK G SET'); }
-  if (line === 'P GET') return out.push(`OK P ${pet.look} ${Buffer.from(pet.name).toString('hex')} ${Buffer.from(pet.pronouns || '').toString('hex')}`);
+  if (line === 'P GET') return out.push(`OK P ${pet.look} ${Buffer.from(pet.name).toString('hex')} ${Buffer.from(pet.pronouns || '').toString('hex')} ${(pet.flag || 0).toString(16).padStart(2, '0')}`);
   if (line === 'P PARTS') {
     ART.forEach((l, layer) => l.parts.forEach((p, i) =>
       out.push(`PP ${layer} ${i} ${rarity(layer, i)} ${+owns(layer, i)} ${p.looks} ${Buffer.from(p.name).toString('hex')}`)));
     return out.push(`OK P PARTS ${exp} ${owned.size} ${DROPS.length}`);
   }
   if (line.startsWith('P SET ')) {
-    const [, , look, name, pronouns] = line.split(' '), text = h => Buffer.from(!h || h === '-' ? '' : h, 'hex').toString();
-    pet = { look, name: text(name), pronouns: pronouns === undefined ? pet.pronouns : text(pronouns) };
+    const [, , look, name, pronouns, flag] = line.split(' '), text = h => Buffer.from(!h || h === '-' ? '' : h, 'hex').toString();
+    pet = { look, name: text(name), pronouns: pronouns === undefined ? pet.pronouns : text(pronouns),
+      flag: flag === undefined ? pet.flag : parseInt(flag, 16) || 0 };
     // As the X4 does when the House next opens (houseUpdateMe): its member card takes the name, look and pronouns.
-    const mine = memberHex(1, PIP, ++house.clock, pet.name || 'Pet', pet.pronouns, parseInt(look, 16) >>> 0);
+    const mine = memberHex(1, PIP, ++house.clock, pet.name || 'Pet', pet.pronouns, parseInt(look, 16) >>> 0, pet.flag || 0);
     house.records.set(key(mine), mine);
     return out.push('OK P SET');
   }

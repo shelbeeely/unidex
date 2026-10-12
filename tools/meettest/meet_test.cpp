@@ -42,9 +42,11 @@ int main() {
   check(memcmp(p, "RPM", 3) == 0, "a RoomiePet's packets start RPM");
   Hello withPr = hello(77, "Pip"), backPr;
   strcpy(withPr.pronouns, "they/them");
+  withPr.flag = 0x83;
   n = encodeHello(withPr, p);
-  check(n <= 250 && decodeHello(p, n, backPr) && strcmp(backPr.pronouns, "they/them") == 0 && strcmp(backPr.name, "Pip") == 0,
-        "a HELLO carries the owner's pronouns");
+  check(n <= 250 && decodeHello(p, n, backPr) && strcmp(backPr.pronouns, "they/them") == 0 && strcmp(backPr.name, "Pip") == 0 &&
+            backPr.flag == 0x83,
+        "a HELLO carries the owner's pronouns and pride flag");
   n = encodeHello(in, p);
   memcpy(bad, p, n);
   memcpy(bad, UNIDEX_MAGIC, 3);

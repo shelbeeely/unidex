@@ -6,8 +6,8 @@
 // WebAssembly. Every change re-reads the household from the X4 first, makes the change as the X4 itself would, and
 // sends back only the records that changed, which the X4 merges as at a Sync.
 
-import { LAYERS as ART, DRAW_ORDER, BITS, PRONOUNS } from './pet-art.js';
-import { drawPin, cleanPronouns } from './pin.js';
+import { LAYERS as ART, DRAW_ORDER, BITS, PRONOUNS, FLAGS } from './pet-art.js';
+import { drawPin, drawFlag, cleanPronouns, ON_PIN, flagIndex } from './pin.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
@@ -300,8 +300,8 @@ const VIEWS = {
     return `<h2>Roommates</h2>
       ${S.members.map(m => {
         const link = m.id !== S.me && payLink(m, 0, S.me);
-        return `<div class="card"><div class="row"><canvas class="mini" data-look="${m.look}" data-pronouns="${esc(m.pronouns || '')}" width="96" height="96"></canvas>
-          <div class="grow"><div class="title">${withPronouns(m.name, m.pronouns)}${m.id === S.me ? ' · you' : ''}</div>
+        return `<div class="card"><div class="row"><canvas class="mini" data-look="${m.look}" data-pronouns="${esc(m.pronouns || '')}" data-flag-byte="${m.flag || 0}" width="96" height="96"></canvas>
+          <div class="grow"><div class="title">${withPronouns(m.name, m.pronouns, m.flag)}${m.id === S.me ? ' · you' : ''}</div>
           <div class="sub">${m.tag ? '$' + esc(m.tag) : 'No $cashtag'} · ${m.balance > 0 ? 'owed ' + money(m.balance) : m.balance < 0 ? 'owes ' + money(-m.balance) : 'even'}</div></div>
           ${link ? `<a class="b cash" href="${esc(link.url)}">Cash App</a><button class="b" data-act="shareMember" data-id="${m.id}">Share</button>` : ''}</div></div>`;
       }).join('')}
@@ -349,8 +349,8 @@ const VIEWS = {
 
 // ---- The Pet designer (the Pet tab): the website's Tools page designer, for the X4. One row per layer with
 // previous and next, a preview drawn from the same art as the X4 (pet-art.js, generated from the firmware's parts),
-// a strip of every piece in the layer you're on, the name, the pronouns and the pronoun pin, and Wear it. Gifts not
-// found yet (they drop after chores) are skipped, and shown locked in the strip.
+// a strip of every piece in the layer you're on, the name, the pronouns, a pride flag, the pin (pronouns or flag), and
+// Wear it. Gifts not found yet (they drop after chores) are skipped, and shown locked in the strip.
 const LAYERS = ART.map(l => l.name);
 const ROWS = [6, 5, 3, 4, 0, 1, 2];  // as on the X4: clothes first (Outfit, Hair, Hat, Accessory, Body, Eyes, Mouth)
 const SHIFT = BITS.map((_, i) => BITS.slice(0, i).reduce((a, b) => a + b, 0));
@@ -364,15 +364,17 @@ const owned = (layer, index) => { const p = partInfo(layer, index); return !p ||
 const offered = layer => ART[layer].parts.map((_, i) => i).filter(i => owned(layer, i));
 // What's being designed: the parts, the pin, the name, the pronouns and the layer shown in the strip. Starts as what
 // the X4 wears; Load puts that back.
-const design = { parts: null, pin: false, name: '', pronouns: '', strip: 6 };
+const design = { parts: null, pin: false, name: '', pronouns: '', flag: 0, strip: 6 };  // flag: the flag byte
 function loadDesign() {
   design.parts = lookParts(info.pet.look).map((p, i) => (p < ART[i].parts.length ? p : 0));
   design.pin = lookPin(info.pet.look);
   design.name = info.pet.name || '';
   design.pronouns = info.pet.pronouns || '';
+  design.flag = info.pet.flag || 0;
 }
+const pinShows = () => (!design.pin ? 'off' : design.flag & ON_PIN ? 'flag' : 'pronouns');
 
-function drawPet(canvas, parts, pin, pronouns) {
+function drawPet(canvas, parts, pin, pronouns, flag = 0) {
   const ctx = canvas.getContext('2d'), s = canvas.width / 32;
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -384,10 +386,11 @@ function drawPet(canvas, parts, pin, pronouns) {
       ctx.fillRect(x * s, y * s, s, s);
     }));
   }
-  if (pin) drawPin(ctx, pronouns, s);
+  if (pin) drawPin(ctx, pronouns, s, flag);
 }
-// Name with pronouns after it, as the X4 shows it: "Pip (she/her)".
-const withPronouns = (name, pronouns) => esc(name) + (pronouns ? ` <span class="pr">(${esc(pronouns)})</span>` : '');
+// Name with the pride flag before it and pronouns after it, as the X4 shows them: "[flag] Pip (she/her)".
+const withPronouns = (name, pronouns, flag) => (flagIndex(flag) ? `<canvas class="flag" data-flag="${flag}" width="48" height="30"></canvas> ` : '') +
+  esc(name) + (pronouns ? ` <span class="pr">(${esc(pronouns)})</span>` : '');
 
 function designer() {
   if (!design.parts) loadDesign();
@@ -417,14 +420,17 @@ function designer() {
           `<option${p === d.pronouns ? ' selected' : ''}>${esc(p)}</option>`).join('')}<option value="*"${preset ? '' : ' selected'}>Other...</option></select></label>
         <input id="petPronounsOther" type="text" maxlength="12" placeholder="Your pronouns" value="${preset ? '' : esc(d.pronouns)}"
           autocomplete="off" ${preset ? 'hidden' : ''} aria-label="Your pronouns">
-        <label class="check"><input id="petPin" type="checkbox"${d.pin ? ' checked' : ''}> Wear a pronoun pin</label>
+        <label class="nm">Pride flag<select id="petFlag">${FLAGS.map((f, i) => `<option value="${i}"${i === flagIndex(d.flag) ? ' selected' : ''}>${esc(f.name)}</option>`).join('')}</select></label>
+        <label class="nm">Pin<select id="petPin">${[['off', 'No pin'], ['pronouns', 'Pronoun pin'], ['flag', 'Flag pin']].map(([v, n]) =>
+          `<option value="${v}"${v === pinShows() ? ' selected' : ''}>${n}</option>`).join('')}</select></label>
         <button class="b p" data-act="pWear">Wear it on the X4</button>
         <button class="b" data-act="pRandom">Random look</button>
         <button class="b" data-act="pLoad">Load from the X4</button></div>
       <div class="rows">${rows}</div>
     </div>
-    <p class="note">Your pronouns show beside your Pet's name on the X4, to Pets you meet and their friends lists, and on
-      your household's Roommates; the pin shows them on your Pet too.</p>
+    <p class="note">Your pronouns and flag show beside your Pet's name on the X4, to Pets you meet and in their friends
+      lists, and on your household's Roommates; a pin shows one of them on your Pet too. The X4 draws flags in black and
+      white, each colour a texture.</p>
     <h3>${LAYERS[d.strip]}</h3>
     <div class="strip">${strip}</div>`;
 }
@@ -432,7 +438,7 @@ function designer() {
 // Every Pet on the page: the designer's preview and strip, and the roommates' Pets (canvas[data-look]).
 function paintPets() {
   const c = $('petPreview');
-  if (c) drawPet(c, design.parts, design.pin, design.pronouns);
+  if (c) drawPet(c, design.parts, design.pin, design.pronouns, design.flag);
   document.querySelectorAll('canvas[data-tile]').forEach(t => {
     const parts = [...design.parts];
     parts[design.strip] = +t.dataset.tile;
@@ -440,15 +446,21 @@ function paintPets() {
   });
   document.querySelectorAll('canvas[data-look]').forEach(t => {
     const hex = (+t.dataset.look >>> 0).toString(16);
-    drawPet(t, lookParts(hex), lookPin(hex), t.dataset.pronouns || '');
+    drawPet(t, lookParts(hex), lookPin(hex), t.dataset.pronouns || '', +t.dataset.flagByte || 0);
   });
+  document.querySelectorAll('canvas[data-flag]').forEach(t => drawFlag(t.getContext('2d'), +t.dataset.flag, 0, 0, t.width, t.height));
 }
 document.addEventListener('input', e => {
   if (e.target.id === 'petName') design.name = e.target.value;
   if (e.target.id === 'petPronounsOther') { design.pronouns = cleanPronouns(e.target.value); paintPets(); }
 });
 document.addEventListener('change', e => {
-  if (e.target.id === 'petPin') { design.pin = e.target.checked; paintPets(); }
+  if (e.target.id === 'petPin') {
+    design.pin = e.target.value !== 'off';
+    design.flag = (design.flag & 0x7f) | (e.target.value === 'flag' ? ON_PIN : 0);
+    paintPets();
+  }
+  if (e.target.id === 'petFlag') { design.flag = +e.target.value | (design.flag & ON_PIN); paintPets(); }
   if (e.target.id === 'petPronouns') {
     const other = e.target.value === '*';
     $('petPronounsOther').hidden = !other;
@@ -472,7 +484,8 @@ const PET_ACTIONS = {
   pWear: async () => {
     const name = design.name.replace(/[^\x20-\x7e]/g, '').trim().slice(0, 12), pr = cleanPronouns(design.pronouns);
     const hex = t => (t ? toHex(enc.encode(t)) : '-');
-    ok(await run(`P SET ${lookHex(design.parts, design.pin)} ${hex(name)} ${hex(pr)}`), 'OK P SET');
+    const flag = (flagIndex(design.flag) ? design.flag : 0).toString(16).padStart(2, '0');
+    ok(await run(`P SET ${lookHex(design.parts, design.pin)} ${hex(name)} ${hex(pr)} ${flag}`), 'OK P SET');
     await readExtras();
     await readHouse();  // its member card (name, look, pronouns), as roommates will see it
     loadDesign();
@@ -652,7 +665,7 @@ async function readExtras() {
   const g = reply(r, 'OK G ');
   info.settings = Object.fromEntries((g ? g.slice(5) : '').split(' ').map(kv => kv.split('=')));
   const p = (reply(r, 'OK P ') || 'OK P 0 ').split(' ');
-  info.pet = { look: p[2], name: fromHex(p[3] || ''), pronouns: fromHex(p[4] || '') };
+  info.pet = { look: p[2], name: fromHex(p[3] || ''), pronouns: fromHex(p[4] || ''), flag: parseInt(p[5] || '0', 16) || 0 };
   info.badges = r.filter(l => l.startsWith('F ')).map(l => l.slice(2));
   info.timetable = r.filter(l => l.startsWith('WL ')).map(l => l.slice(3).split(',').slice(0, 5));
 }

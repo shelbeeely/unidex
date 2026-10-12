@@ -9,6 +9,7 @@
 #include <string.h>
 #include "parts.h"
 #include "pronouns.h"
+#include "flags.h"
 
 #ifndef UNIDEX_X4
 #define UNIDEX_X4 0

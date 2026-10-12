@@ -13,6 +13,29 @@ def const(name): return json.loads(re.search(rf"export const {name} = (.*?);\n",
 LAYERS, ORDER, EXAMPLES, DROPS, RARITIES = (const("LAYERS"), const("DRAW_ORDER"), const("EXAMPLES"), const("DROPS"),
                                             const("RARITIES"))
 GLYPHS, CHARS = const("PIN_GLYPHS"), const("PIN_CHARS")
+FLAGS, CHEVRON, RING = const("FLAGS"), const("FLAG_CHEVRON"), const("FLAG_RING")
+
+def flag_colour(f, x, y, w, h):
+    """flags.h's colourAt."""
+    fl = FLAGS[f]
+    if fl["shape"] == "intersex":
+        dx, dy = 2 * x + 1 - w, 2 * y + 1 - h
+        r, t = h * 2 // 3, max(1, h // 6)
+        return RING if (r - t) ** 2 <= dx * dx + dy * dy <= (r + t) ** 2 else fl["colours"][0]
+    if fl["shape"] == "progress":
+        v = (h - abs(2 * y + 1 - h)) - 2 * x
+        if v > 0:
+            return CHEVRON[max(0, 4 - v * 5 // (h + 1))]
+    return fl["colours"][min(len(fl["colours"]) - 1, y * len(fl["colours"]) // h)]
+
+def flag(img, f, x0, y0, w, h, gw=52, gh=32):
+    """A flag in colour, w x h pixels at (x0, y0), with a dark edge."""
+    d = ImageDraw.Draw(img)
+    for gy in range(gh):
+        for gx in range(gw):
+            d.rectangle([x0 + gx * w / gw, y0 + gy * h / gh, x0 + (gx + 1) * w / gw - 1, y0 + (gy + 1) * h / gh - 1],
+                        fill=flag_colour(f, gx, gy, gw, gh))
+    d.rectangle([x0, y0, x0 + w - 1, y0 + h - 1], outline=INK, width=max(1, round(w / 40)))
 DEFAULT = [0, 0, 0, 0, 1, 0, 0]
 font_path = os.path.join(root, "tools/fonts/LiberationSans-Bold.ttf")
 font = lambda size: ImageFont.truetype(font_path, size)
@@ -58,11 +81,13 @@ img = Image.new("RGB", (w, tile + label + 2 * pad), PAPER)
 d = ImageDraw.Draw(img)
 for i, ex in enumerate(EXAMPLES):
     x = pad + i * (tile + pad)
-    p = pet(ex["parts"], scale)
-    if ex["pin"]:
+    p = pet(ex["parts"], scale).convert("RGB")
+    if ex["pin"] == "pronouns":
         pin(p, ex["pronouns"], scale)
+    elif ex["pin"] == "flag":
+        flag(p, ex["flag"], (64 - 26) // 2 * scale // 2, 48 * scale // 2, 26 * scale // 2, 14 * scale // 2)
     img.paste(p, (x, pad))
-    t = ex["pronouns"]
+    t = ex["pronouns"] + " · " + FLAGS[ex["flag"]]["name"]
     tw = d.textlength(t, font=font(22))
     d.text((x + (tile - tw) / 2, pad + tile + 8), t, fill=INK, font=font(22))
 img.save(os.path.join(root, "docs/roomiepet-pets.png"), optimize=True)
@@ -95,4 +120,17 @@ for layer, title in rows_of:
             d.text((x + (cell - tw) / 2, top + cell + 21), e, fill=MUTED, font=font(12))
     y += lines(layer) * (cell + name_h + pad)
 img.save(os.path.join(root, "docs/roomiepet-wardrobe.png"), optimize=True)
-print("wrote docs/roomiepet-pets.png and docs/roomiepet-wardrobe.png")
+
+# The pride flags, each named.
+fw, fh, pad, label = 156, 96, 18, 30
+cols = 5
+rows = -(-(len(FLAGS) - 1) // cols)
+img = Image.new("RGB", (pad + cols * (fw + pad), pad + rows * (fh + label + pad)), PAPER)
+d = ImageDraw.Draw(img)
+for i, fl in enumerate(FLAGS[1:]):
+    x, y = pad + i % cols * (fw + pad), pad + i // cols * (fh + label + pad)
+    flag(img, i + 1, x, y, fw, fh)
+    tw = d.textlength(fl["name"], font=font(18))
+    d.text((x + (fw - tw) / 2, y + fh + 5), fl["name"], fill=INK, font=font(18))
+img.save(os.path.join(root, "docs/roomiepet-flags.png"), optimize=True)
+print("wrote docs/roomiepet-pets.png, docs/roomiepet-wardrobe.png and docs/roomiepet-flags.png")

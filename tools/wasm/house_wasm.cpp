@@ -116,6 +116,7 @@ EXPORT size_t state(uint32_t today, int wday, int mday) {
     char pr[pronouns::MAX + 1];
     pronounsOf(*m[i], pr);
     j.key("pronouns"), j.str(pr);
+    j.key("flag"), j.num(m[i]->d & 0xFF);
     j.key("look"), j.num(m[i]->a);
     j.key("balance"), j.num(bal[i]);
     const char *tag = payTagOf(h, m[i]->origin);
