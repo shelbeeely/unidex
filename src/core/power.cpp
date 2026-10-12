@@ -9,18 +9,21 @@
 #include <driver/gpio.h>
 #include <esp_sleep.h>
 #include <esp_task_wdt.h>
+#include <esp_arduino_version.h>
 
 static uint32_t idleMs = 10000;  // Settings: 10, 20, 30 or 60 s (NVS sleep_s)
 
 #if UNIDEX_X4
+#include <BoardConfig.h>
 // Xteink X4: GPIO13 HIGH keeps battery power on (LOW cuts it). The panel has no power switch. Deep sleep can wake
 // only on GPIO0-5 going LOW: Power (GPIO3) and the two button ladders (GPIO1, GPIO2), which only Right and Down
 // pull low enough. Light sleep can't see the other ladder keys either, so naps there are short (powerNap).
-static const gpio_num_t PIN_LATCH = GPIO_NUM_13;
-static const gpio_num_t PIN_EPD_RST = GPIO_NUM_5;
-static const gpio_num_t PIN_EPD_CS = GPIO_NUM_21;
-static const gpio_num_t WAKE_PINS[] = {GPIO_NUM_1, GPIO_NUM_2, GPIO_NUM_3};
-static const uint64_t WAKE_MASK = (1ULL << GPIO_NUM_1) | (1ULL << GPIO_NUM_2) | (1ULL << GPIO_NUM_3);
+// The pins are the FreeInk SDK's X4 board profile.
+static const gpio_num_t PIN_LATCH = (gpio_num_t)BoardConfig::XTEINK_X4.power.latch0;
+static const gpio_num_t PIN_EPD_RST = (gpio_num_t)BoardConfig::XTEINK_X4.display.rst;
+static const gpio_num_t PIN_EPD_CS = (gpio_num_t)BoardConfig::XTEINK_X4.display.cs;
+static const gpio_num_t WAKE_PINS[] = {GPIO_NUM_1, GPIO_NUM_2, (gpio_num_t)BoardConfig::XTEINK_X4.input.power};
+static const uint64_t WAKE_MASK = (1ULL << WAKE_PINS[0]) | (1ULL << WAKE_PINS[1]) | (1ULL << WAKE_PINS[2]);
 static const uint32_t NAP_MAX_MS = 40;  // a press is at least ~80 ms: still caught, and debounced as usual
 #else
 static const gpio_num_t PIN_LATCH = GPIO_NUM_17;      // HIGH keeps battery power on; has a pull-down
@@ -109,6 +112,7 @@ void powerSleepIfIdle() {
 // Keep the panel powered in its own deep sleep (RAM retained), so the first refresh after waking can be
 // partial. RST/CS stay HIGH so it isn't woken or selected. A button wakes it (and, if timerUs, the timer).
 static void deepSleep(uint64_t timerUs) {
+  displayDeepSleep();  // before the holds below freeze the panel's CS
   gpio_hold_en(PIN_LATCH);
 #if !UNIDEX_X4
   gpio_hold_en(PIN_EPD_PWR);
@@ -165,7 +169,12 @@ extern TaskHandle_t loopTaskHandle;  // Arduino's main loop task (cores/esp32/ma
 static const uint32_t WATCHDOG_S = 30;
 
 void powerWatchdogBegin() {
+#if ESP_ARDUINO_VERSION_MAJOR >= 3  // Arduino core 3 (the X4 build)
+  const esp_task_wdt_config_t config = {WATCHDOG_S * 1000, 0, true};  // no idle tasks watched, as before
+  esp_task_wdt_reconfigure(&config);
+#else
   esp_task_wdt_init(WATCHDOG_S, true);  // already started by the system (5 s, idle task only): this sets 30 s
+#endif
   enableLoopWDT();                      // the loop feeds it once per pass
 }
 

@@ -56,7 +56,11 @@ static void loadSalt() {
 // First 8 bytes of SHA-256.
 static uint64_t sha64(const uint8_t *data, size_t len) {
   uint8_t out[32];
+#if MBEDTLS_VERSION_MAJOR >= 3  // Arduino core 3 (the X4 build)
+  mbedtls_sha256(data, len, out, 0);
+#else
   mbedtls_sha256_ret(data, len, out, 0);
+#endif
   uint64_t h = 0;
   for (int i = 0; i < 8; i++) h = h << 8 | out[i];
   return h;

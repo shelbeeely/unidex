@@ -23,6 +23,8 @@ This list was compiled from each project's own licence files and package metadat
 | Mozilla root certificate list (certs/x509_crt_bundle.bin, 2024-09-24) | – | MPL-2.0 | Mozilla contributors | https://curl.se/docs/caextract.html |
 | ES8311 register values and start-up sequences in src/core/audio.cpp | esp_codec_dev 1.3.5 | Apache-2.0 | 2023 Espressif Systems (Shanghai) CO LTD | https://github.com/espressif/esp-adf/tree/master/components/esp_codec_dev |
 | Note clean-up prompt in src/apps/notes/cloud.cpp | – | MIT (see below) | 2026 Forrest | https://github.com/Forrest404/forrest-notes |
+| FreeInk SDK (X4 build only: BoardConfig, EInkDisplay, InputManager, BatteryMonitor; the freeink-sdk submodule) | 1a5448d | MIT (see below) | 2026 FreeInk; portions from the OpenX4 E-Paper Community SDK (CidVonHighwind and contributors) | https://github.com/Free-Ink/freeink-sdk |
+| Arduino core for ESP32 and ESP-IDF (X4 build only, through the pioarduino platform) | 3.3.7 / 5.5 | LGPL-2.1-or-later and Apache-2.0, as above | Arduino team; Espressif Systems | https://github.com/espressif/arduino-esp32 |
 
 **Changes to Apache-2.0 material:** the ES8311 register values and sequences from Espressif's `es8311.c` were
 used in a new, minimal standalone driver written for the Wire bus and the legacy ESP-IDF I2S API
@@ -160,6 +162,35 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
+```
+
+### FreeInk SDK (MIT)
+
+The SDK's NOTICE file (freeink-sdk/NOTICE) also carries the OpenX4 E-Paper Community SDK's MIT licence for the panel
+sequences and waveforms derived from it.
+
+```
+MIT License
+
+Copyright (c) 2026 FreeInk
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 ```
 
 ### forrest-notes (MIT)

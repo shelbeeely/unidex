@@ -4,8 +4,10 @@
 #include "board.h"
 
 #if UNIDEX_X4
-static const int PIN_BATTERY = 0;  // ADC1 ch0, behind a divider by 2
-static const int PIN_USB = 20;     // HIGH while USB power is present
+// Xteink X4: the FreeInk SDK reads the battery (GPIO0, divider by 2) and says where USB power is sensed (GPIO20).
+#include <BatteryMonitor.h>
+#include <BoardConfig.h>
+static const BatteryMonitor monitor;
 static const float CALIBRATION = 1.0f;  // not yet measured on an X4
 #else
 static const int PIN_BATTERY = 4;  // ADC1 ch3, behind a divider by 2
@@ -24,10 +26,14 @@ int batteryMillivolts() {
 #if UNIDEX_DEV
   if (fakeMv) return fakeMv;
 #endif
+#if UNIDEX_X4
+  return monitor.readMillivolts() * CALIBRATION;
+#else
   analogSetPinAttenuation(PIN_BATTERY, ADC_11db);  // the pin sees about 2.1 V at a full battery
   uint32_t sum = 0;
   for (int i = 0; i < 32; i++) sum += analogReadMilliVolts(PIN_BATTERY);
   return sum / 32 * 2 * CALIBRATION;
+#endif
 }
 
 RTC_DATA_ATTR static battery::State state;  // survives sleep (constant-initialized, so set only at power-up)
@@ -74,8 +80,9 @@ bool batteryCharging() {
   if (fakeMv) return fakeMv >= 4190;  // a pretend reading: as if on battery
 #endif
 #if UNIDEX_X4
-  pinMode(PIN_USB, INPUT);  // the X4 senses USB power itself, charger or computer
-  if (digitalRead(PIN_USB) == HIGH) return true;
+  const int usb = BoardConfig::ACTIVE.usbDetect;  // the X4 senses USB power itself, charger or computer
+  pinMode(usb, INPUT);
+  if (digitalRead(usb) == HIGH) return true;
 #endif
   return HWCDC::isPlugged() || batteryMillivolts() >= 4190;  // the charger holds 4.20 V while topping up
 }

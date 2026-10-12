@@ -16,13 +16,14 @@ struct Button {
 };
 
 #if UNIDEX_X4
-// Xteink X4: the four front keys share one ADC pin (GPIO1) and the two side keys another (GPIO2), each through a
-// resistor ladder that idles at the top of the range; Power is its own pin (GPIO3, active LOW). They map onto the
-// two-button scheme: any arrow key (front Left/Right, side Up/Down) is A, Confirm and Power are B, and Back is
-// "hold A" straight away. Two keys on the same ladder pin can't be told apart when both are down, so the restart
-// is Power (or Confirm) held with a side key. Ranges: CrossPoint Reader's readings from real X4s (MIT).
+// Xteink X4, through the FreeInk SDK's InputManager (its ADC ladder ranges for the four front keys on GPIO1 and the
+// two side keys on GPIO2, and Power on GPIO3). The keys map onto the two-button scheme: any arrow key (front
+// Left/Right, side Up/Down) is A, Confirm and Power are B, and Back is "hold A" straight away. Two keys on the same
+// ladder pin can't be told apart when both are down, so the restart is Power (or Confirm) held with a side key.
+#include <InputManager.h>
+
+static InputManager keys;
 enum : int { KEY_A = -1, KEY_B = -2, KEY_BACK = -3 };
-static const int PIN_LADDER_FRONT = 1, PIN_LADDER_SIDE = 2, PIN_POWER = 3;
 
 static Button buttons[] = {
   {KEY_A, Event::AShort, Event::ALong, false, false, 0},
@@ -30,34 +31,33 @@ static Button buttons[] = {
   {KEY_BACK, Event::ALong, Event::ALong, false, false, 0},  // one "back" per press, however long
 };
 
-// Front ladder: Back ~3500, Confirm ~2700, Left ~1500, Right ~0; side: Up ~2250, Down ~0; nothing pressed ~4095.
-static int frontKey() {
-  const int v = analogRead(PIN_LADDER_FRONT);
-  return v > 3900 ? 0 : v > 3100 ? KEY_BACK : v > 2090 ? KEY_B : KEY_A;
-}
-static bool sideDown() { return analogRead(PIN_LADDER_SIDE) <= 3900; }
-static bool powerDown() { return digitalRead(PIN_POWER) == LOW; }
+static uint8_t state;  // InputManager's raw key bits, read once per poll
+static bool key(uint8_t k) { return state & (1 << k); }
+static void readKeys() { state = keys.getState(); }
 
 static bool isDown(const Button &b) {
   switch (b.pin) {
-    case KEY_A: return sideDown() || frontKey() == KEY_A;
-    case KEY_B: return powerDown() || frontKey() == KEY_B;
-    default: return frontKey() == KEY_BACK;
+    case KEY_A:
+      return key(InputManager::BTN_LEFT) || key(InputManager::BTN_RIGHT) || key(InputManager::BTN_UP) ||
+             key(InputManager::BTN_DOWN);
+    case KEY_B: return key(InputManager::BTN_CONFIRM) || key(InputManager::BTN_POWER);
+    default: return key(InputManager::BTN_BACK);
   }
 }
-static bool bDown() { return powerDown() || frontKey() == KEY_B; }
+static bool bDown() {
+  readKeys();
+  return isDown(buttons[1]);
+}
 
 static void pinsInit() {
-  pinMode(PIN_LADDER_FRONT, INPUT);
-  pinMode(PIN_LADDER_SIDE, INPUT);
-  pinMode(PIN_POWER, INPUT_PULLUP);
-  analogSetAttenuation(ADC_11db);  // the whole 0-3.3 V range
+  keys.begin();
+  readKeys();
 }
 
 // Which keys can wake the board (power.cpp): Power, and the ladder keys that pull their pin right down (Right, Down).
 static bool wokeBy(const Button &b, uint64_t mask) {
-  if (b.pin == KEY_A) return mask & ((1ULL << PIN_LADDER_FRONT) | (1ULL << PIN_LADDER_SIDE));
-  if (b.pin == KEY_B) return mask & (1ULL << PIN_POWER);
+  if (b.pin == KEY_A) return mask & ((1ULL << InputManager::BUTTON_ADC_PIN_1) | (1ULL << InputManager::BUTTON_ADC_PIN_2));
+  if (b.pin == KEY_B) return mask & (1ULL << BoardConfig::ACTIVE.input.power);
   return false;
 }
 static bool buttonWoke() { return esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_GPIO; }
@@ -74,6 +74,7 @@ static void pinsInit() {
   for (Button &b : buttons) pinMode(b.pin, INPUT_PULLUP);
 }
 static bool wokeBy(const Button &b, uint64_t mask) { return mask & (1ULL << b.pin); }
+static void readKeys() {}
 static bool buttonWoke() { return esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1; }
 static uint64_t wakeMask() { return esp_sleep_get_ext1_wakeup_status(); }
 #endif
@@ -117,6 +118,7 @@ Event inputPoll() {
     return e;
   }
   uint32_t now = millis();
+  readKeys();
   // Both held: neither gives its own events (no "home" on the way to a restart), and after 3 s: Reset.
   Button &a = buttons[0], &b = buttons[1];
   if (a.down && b.down) {

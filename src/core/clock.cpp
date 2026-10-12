@@ -2,6 +2,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <Wire.h>
+#include <esp_arduino_version.h>
 #include <esp_sntp.h>
 #include <sys/time.h>
 #include "board.h"
@@ -131,7 +132,11 @@ const char *clockSync() {
     }
     if (sntp_get_sync_status() == SNTP_SYNC_STATUS_COMPLETED) writeChipNow();
     else err = "no time server";
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+    esp_sntp_stop();
+#else
     sntp_stop();
+#endif
     netOff();
   }
 #if DEBUG

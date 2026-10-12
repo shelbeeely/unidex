@@ -2,7 +2,15 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <memory>
+#include <esp_arduino_version.h>
+#if ESP_ARDUINO_VERSION_MAJOR >= 3  // Arduino core 3 (the X4 build): the enterprise calls were renamed
+#include <esp_eap_client.h>
+#define esp_wifi_sta_wpa2_ent_clear_ca_cert esp_eap_client_clear_ca_cert
+#define esp_wifi_sta_wpa2_ent_set_ca_cert esp_eap_client_set_ca_cert
+#define esp_wifi_sta_wpa2_ent_disable esp_wifi_sta_enterprise_disable
+#else
 #include <esp_wpa2.h>
+#endif
 #include "credentials.h"
 #include "board.h"
 #include "power.h"
@@ -10,6 +18,7 @@
 #include "devtools.h"
 
 extern const uint8_t caBundle[] asm("_binary_certs_x509_crt_bundle_bin_start");  // see certs/README.md
+extern const uint8_t caBundleEnd[] asm("_binary_certs_x509_crt_bundle_bin_end");
 
 static const uint32_t WIFI_TIMEOUT_MS = 20000, IO_TIMEOUT_MS = 30000;  // enterprise logins take longer
 
@@ -115,7 +124,11 @@ int netHttps(const char *host, const char *method, const char *path, const Strin
   // On the heap: the client holds ~4 KB of mbedTLS state, too much next to the handshake on the 8 KB loop stack.
   std::unique_ptr<WiFiClientSecure> client(new WiFiClientSecure);
   WiFiClientSecure &c = *client;
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+  c.setCACertBundle(caBundle, caBundleEnd - caBundle);
+#else
   c.setCACertBundle(caBundle);
+#endif
   c.setTimeout(IO_TIMEOUT_MS / 1000);
   if (!c.connect(host, 443)) return -1;
 

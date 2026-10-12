@@ -49,6 +49,7 @@ void displayFastWave(uint8_t frames, uint8_t rate);  // test build: try another 
 void displaySetGameFrames(uint8_t frames, uint8_t rate);  // test build: the games' waveform (X GAMEWAVE; 0 = default)
 #endif
 void displaySetSpiHz(uint32_t hz);  // SPI clock to the panel
+void displayDeepSleep();  // before the board's deep sleep (the X4's panel stays awake between screens until then)
 
 // Clock tick: a partial refresh that doesn't count toward the every-10 rule (only the minute changes,
 // so there's nothing to ghost and no full flash every 10 minutes), then sleep.

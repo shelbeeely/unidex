@@ -1,5 +1,6 @@
 #include "link.h"
 #include <WiFi.h>
+#include <esp_arduino_version.h>
 #include <esp_now.h>
 #include <esp_random.h>
 #include <esp_wifi.h>
@@ -60,6 +61,15 @@ static void received(const uint8_t *mac, const uint8_t *data, int len) {
   xQueueSend(queue, &p, 0);  // full: dropped, like a packet lost in the air
 }
 
+#if ESP_ARDUINO_VERSION_MAJOR >= 3  // Arduino core 3 (the X4 build) passes the sender in a struct
+static void receivedInfo(const esp_now_recv_info_t *info, const uint8_t *data, int len) {
+  received(info->src_addr, data, len);
+}
+static const esp_now_recv_cb_t onReceive = receivedInfo;
+#else
+static const esp_now_recv_cb_t onReceive = received;
+#endif
+
 static bool addPeer(const uint8_t mac[6]) {
   if (esp_now_is_peer_exist(mac)) return true;
   esp_now_peer_info_t peer = {};
@@ -90,7 +100,7 @@ const char *linkStart() {
   mac[0] = (mac[0] & 0xFC) | 0x02;  // locally administered, single device
   esp_wifi_set_mac(WIFI_IF_STA, mac);
   esp_wifi_set_channel(CHANNEL, WIFI_SECOND_CHAN_NONE);
-  if (esp_now_init() != ESP_OK || esp_now_register_recv_cb(received) != ESP_OK || !addPeer(BROADCAST)) {
+  if (esp_now_init() != ESP_OK || esp_now_register_recv_cb(onReceive) != ESP_OK || !addPeer(BROADCAST)) {
     esp_now_deinit();
     netOff();
     netClaim(false);
