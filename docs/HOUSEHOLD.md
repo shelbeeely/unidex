@@ -21,14 +21,29 @@ kept on the SD card (`/house.dat`), so it needs a card.
 |---|---|---|
 | **Chores** | Each chore with whose turn it is and when it's due ("you, today", "Moss, 2d", "Pip, 1d late"). | B: done (the turn moves to the next roommate). Last row: add one (pick the chore, then how often). Hold B: remove |
 | **Shopping** | What to buy; what's been got goes to the bottom. | B: got it / not got. Last rows: add (from a list of common things), clear what's been got. Hold B: remove |
-| **Money** | Who owes whom, in the fewest payments. | B on a line you're in: settled. Last row: "I paid for...": pick what, then the amount; it's shared by everyone who lived there at the time |
+| **Money** | Who owes whom, in the fewest payments. | B on a line you're in: the Cash App code of whoever is owed (see below), then B again: settled. Last row: "I paid for...": pick what, then the amount; it's shared by everyone who lived there at the time |
 | **Reminders** | Bin day, recycling, rent and so on, every week or every month. | Last row: add (what, then when). Hold B: remove |
 | **Pet messages** | What the Pets have said ("Pip: Out of milk!"). | Last row: your Pet says something (from a list). Hold B: remove |
-| **Roommates** | The Pets in the household, in the order they joined (the rota's order). | Hold B: remove a roommate who has moved out. Hold B on the Roommates row of the menu: leave the household (this device only) |
+| **Roommates** | The Pets in the household, in the order they joined (the rota's order), each with its owner's $cashtag. | B on yourself: set your $cashtag. B on a roommate: their Cash App code. Hold B: remove a roommate who has moved out. Hold B on the Roommates row of the menu: leave the household (this device only) |
 | **Sync with roommates** | Swaps the household with every roommate's device in reach, for as long as it's open (it stops by itself after 90 s without a press). | Hold A: back |
 
 Changes made on one device reach the others at their next Sync, directly or through someone else's device. A
 change made on two devices before they meet: the later one wins.
+
+## Paying each other (Cash App)
+
+Each roommate sets their own $cashtag once, on their own device: Roommates, B on yourself, then the tag a letter at
+a time (A: next letter, hold B: previous, B: next place; B on an empty place at the end saves; all empty removes
+it). It reaches the others at the next Sync.
+
+On **Money**, B on "You owe Pip $6.50" shows a QR code for Pip's Cash App link with the amount
+(`https://cash.app/$pip/6.50`). Scan it with your phone's camera and Cash App opens to pay Pip. When the line is
+someone owing you, it shows your own code, so they can scan it off your screen. B on that screen then marks it
+settled. The X4 only shows the code: no payment details or money go through it.
+
+A $cashtag is only accepted from its owner's own device, so nobody else's unidex can change where your
+roommates' money goes. The amount on the end of the link is the form in common use but isn't documented by Cash
+App: if a phone opens Cash App without the amount, `AMOUNT_IN_LINK` in `src/apps/house/house.cpp` turns it off.
 
 ## The Pets
 

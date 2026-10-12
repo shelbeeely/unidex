@@ -165,6 +165,45 @@ int main() {
   check(!timeIsBetter(T + 300, T - 600, T, T - 86400), "the better clock keeps its own time");
   check(!timeIsBetter(T, T - 600, T + 300, T - 600), "two clocks set at the same time leave each other alone");
 
+  // ---- Cash App $cashtags.
+  check(validCashtag("pip") && validCashtag("$Pip_2024") && validCashtag("a-b"), "ordinary cashtags are valid");
+  check(!validCashtag("") && !validCashtag("$") && !validCashtag("1234") && !validCashtag("has space") &&
+            !validCashtag("abcdefghijklmnopqrstu"),
+        "empty, all digits, spaces and over 20 characters are not");
+  House *p1 = newHouse(HOUSE, PIP, "Pip");
+  House *p2 = newHouse(HOUSE, BISCUIT, "Biscuit");
+  check(payTagOf(*p1, PIP) == nullptr, "no cashtag until one is set");
+  check(setPayTag(*p1, "$pipcash") && strcmp(payTagOf(*p1, PIP), "pipcash") == 0, "set your own cashtag");
+  check(!setPayTag(*p1, "no way!"), "an invalid cashtag is refused");
+  send(*p1, *p2);
+  check(payTagOf(*p2, PIP) && strcmp(payTagOf(*p2, PIP), "pipcash") == 0, "a roommate's device learns it at Sync");
+  setPayTag(*p1, "pip2");
+  send(*p1, *p2);
+  check(strcmp(payTagOf(*p2, PIP), "pip2") == 0, "a change reaches them too");
+  // Biscuit's device tries to change Pip's cashtag: refused, on Biscuit's own device and on Pip's.
+  for (int i = 0; i < p2->count; i++)
+    if (p2->r[i].kind == PAYTAG) {
+      strcpy(p2->r[i].text, "biscuitcash");
+      touch(*p2, p2->r[i]);
+    }
+  check(payTagOf(*p2, PIP) == nullptr, "a cashtag changed by someone else isn't shown");
+  send(*p2, *p1);
+  check(strcmp(payTagOf(*p1, PIP), "pip2") == 0, "nor accepted by its owner's device");
+  House *p3 = newHouse(HOUSE, MOSS, "Moss");
+  send(*p2, *p3);
+  send(*p1, *p3);
+  check(strcmp(payTagOf(*p3, PIP), "pip2") == 0, "a third device keeps the owner's, whichever order copies arrive");
+  check(setPayTag(*p1, "") && payTagOf(*p1, PIP) == nullptr, "clearing it");
+  send(*p1, *p3);
+  check(payTagOf(*p3, PIP) == nullptr, "and the clearing spreads");
+  char link[64];
+  cashAppLink("pip2", 650, true, link, sizeof link);
+  check(strcmp(link, "https://cash.app/$pip2/6.50") == 0, "a link with the amount");
+  cashAppLink("pip2", 650, false, link, sizeof link);
+  check(strcmp(link, "https://cash.app/$pip2") == 0, "and without");
+  cashAppLink("abcdefghijklmnopqrst", 9999999, true, link, sizeof link);
+  check(strlen(link) <= 53, "the longest link fits a version 3 QR code (53 bytes)");
+
   // ---- Reminders.
   Record bin = {};
   bin.kind = REMINDER, bin.a = 0, bin.b = 2;  // Tuesdays

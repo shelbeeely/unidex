@@ -48,7 +48,7 @@ Nothing has run on hardware yet. On two (ideally three) X4s, check:
    - **Listen windows:** a sleeping X4 wakes for about 0.3 s on a shared schedule (every 5 minutes, aligned by the synced clocks). A completion is broadcast in the next window or two, so it reaches the house in a few minutes. The cost is a fraction of a mAh an hour; to be measured in phase 0.
 6. **Room to grow.** Move the house file to version 2 (migrating version 1), raise the record limit (≈300 records ≈ 20 KB of RAM, which the C3 can spare), and add a done-log with a monthly roll-up (needed by phases 4 and 5).
 
-## Phase 2: Cash App codes (small, high value)
+## Phase 2: Cash App codes (small, high value): done, to test on devices
 
 - Each roommate enters their $cashtag once: a letter picker on the X4, or typed on the website's Tools page over USB. It's an owner-only record shared with the household.
 - **Money screen:** on "You owe Pip $6.50", B shows a QR code for Pip's Cash App link. The amount is filled in if Cash App's `cash.app/$tag/amount` links still do that (to be checked); otherwise it's the plain profile link. Scanning it with your phone opens Cash App to pay. The QR code library is already in the firmware.

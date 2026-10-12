@@ -10,6 +10,7 @@
 // copies arrive in, and however often. Deleting is a change too (the DELETED flag), so a deletion spreads like an
 // edit.
 #include <stddef.h>
+#include <stdio.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -25,7 +26,9 @@ enum Kind : uint8_t {
   SETTLE = 5,    // a = who paid, b = pence, c = to whom
   REMINDER = 6,  // text = what, a = 0 weekly (b = weekday, 0 Sunday) or 1 monthly (b = day of the month)
   MESSAGE = 7,   // text = what the Pet says, from origin; the newest few are kept
+  PAYTAG = 8,    // text = the origin's Cash App $cashtag (without the $); only its owner's changes are accepted
 };
+static const uint8_t LAST_KIND = PAYTAG;
 enum Flags : uint8_t { DELETED = 1 };
 
 struct Record {
@@ -92,7 +95,11 @@ inline bool makeRoom(House &h) {
   return true;
 }
 
+// Records only their owner may change: a $cashtag from anyone else's device could send roommates' money elsewhere.
+inline bool ownerOnly(uint8_t kind) { return kind == PAYTAG; }
+
 inline Merge merge(House &h, const Record &in) {
+  if (ownerOnly(in.kind) && in.editor != in.origin) return OLDER;
   tick(h, in.ver);
   for (int i = 0; i < h.count; i++) {
     if (!sameKey(h.r[i], in)) continue;
@@ -258,6 +265,69 @@ inline bool remindToday(const Record &r, int weekday, int mday) {
   return r.a == 0 ? (int)r.b == weekday : (int)r.b == mday;
 }
 
+// ---- Cash App $cashtags: one per member, set on their own device, shown as a QR code to pay them.
+
+static const size_t MAX_CASHTAG = 20;
+// The letters the device offers, a place at a time (cashtags don't care about case). ' ' is an empty place.
+static const char CASHTAG_CHARS[] = " abcdefghijklmnopqrstuvwxyz0123456789_-";
+
+inline bool cashtagChar(char c) {
+  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-';
+}
+
+// 1-20 letters, digits, '_' or '-', with at least one letter (a leading '$' is left off).
+inline bool validCashtag(const char *tag) {
+  if (!tag) return false;
+  if (*tag == '$') tag++;
+  const size_t n = strlen(tag);
+  if (n < 1 || n > MAX_CASHTAG) return false;
+  bool letter = false;
+  for (size_t i = 0; i < n; i++) {
+    if (!cashtagChar(tag[i])) return false;
+    letter |= (tag[i] >= 'a' && tag[i] <= 'z') || (tag[i] >= 'A' && tag[i] <= 'Z');
+  }
+  return letter;
+}
+
+// The member's $cashtag (without the $), or nullptr if they haven't set one.
+inline const char *payTagOf(const House &h, uint32_t id) {
+  const Record *best = nullptr;
+  for (int i = 0; i < h.count; i++) {
+    const Record &r = h.r[i];
+    if (r.kind == PAYTAG && r.origin == id && r.editor == id && (!best || newer(r, *best))) best = &r;
+  }
+  return best && !(best->flags & DELETED) && validCashtag(best->text) ? best->text : nullptr;
+}
+
+// This device's $cashtag: set (a valid tag, '$' optional) or cleared (empty). False for an invalid tag.
+inline bool setPayTag(House &h, const char *tag) {
+  if (tag && *tag == '$') tag++;
+  const bool clear = !tag || !*tag;
+  if (!clear && !validCashtag(tag)) return false;
+  for (int i = 0; i < h.count; i++) {
+    Record &r = h.r[i];
+    if (r.kind != PAYTAG || r.origin != h.me) continue;
+    if (clear) {
+      if (!(r.flags & DELETED)) remove(h, r);
+    } else if (strcmp(r.text, tag) != 0 || (r.flags & DELETED)) {
+      memset(r.text, 0, sizeof r.text);
+      strncpy(r.text, tag, TEXT);
+      r.flags &= ~DELETED;
+      touch(h, r);
+    }
+    return true;
+  }
+  return clear || add(h, PAYTAG, tag) != nullptr;
+}
+
+// The link a phone opens in Cash App: https://cash.app/$tag, and with an amount https://cash.app/$tag/6.50 (the
+// amount suffix is the commonly used form, not one Cash App documents: withAmount turns it off).
+inline void cashAppLink(const char *tag, uint32_t pence, bool withAmount, char *out, size_t len) {
+  if (withAmount && pence)
+    snprintf(out, len, "https://cash.app/$%s/%lu.%02lu", tag, (unsigned long)(pence / 100), (unsigned long)(pence % 100));
+  else snprintf(out, len, "https://cash.app/$%s", tag);
+}
+
 // ---- The radio. Every packet: "UDH", version, type, the household id (u32), then the type's fields.
 //   HELLO   (to everyone, about twice a second while Sync is open): sender's Pet id u32, unix time u32 (0 if its clock
 //           isn't set), when its time was last set from the internet, USB or a clock chip u32 (unix; a device takes
@@ -352,7 +422,7 @@ inline void encodeRecord(const Record &r, uint8_t *o) {
 
 inline bool decodeRecord(const uint8_t *o, Record &r) {
   memset(&r, 0, sizeof r);
-  if (o[0] < MEMBER || o[0] > MESSAGE || o[36] > TEXT || !printable((const char *)o + 37, o[36])) return false;
+  if (o[0] < MEMBER || o[0] > LAST_KIND || o[36] > TEXT || !printable((const char *)o + 37, o[36])) return false;
   r.kind = o[0], r.flags = o[1] & DELETED;
   r.seq = o[2] | o[3] << 8;
   uint32_t *v[8] = {&r.origin, &r.ver, &r.editor, &r.born, &r.a, &r.b, &r.c, &r.d};

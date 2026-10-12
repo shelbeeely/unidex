@@ -2,7 +2,12 @@
 // regular reminders, the Pets' messages, and Sync, which swaps the household with roommates' devices nearby over
 // the radio (no internet). Everything is picked from lists, so two buttons are enough: A = next, B = pick,
 // hold B = the screen's extra (add, remove), hold A = back.
+//
+// Cash App: each roommate sets their $cashtag on their own device (Roommates, B on yourself). Money then shows the
+// person being paid's code as a QR code, which a phone scans to open Cash App: the X4 only shows it, and no payment
+// goes through the device.
 #include <esp_random.h>
+#include <qrcode.h>
 #include "house.h"
 #include "../../core/app.h"
 #include "../../core/clock.h"
@@ -43,7 +48,7 @@ static const char *const WEEKDAYS[] = {"Sundays", "Mondays", "Tuesdays", "Wednes
 #define COUNT(a) (int)(sizeof(a) / sizeof((a)[0]))
 
 enum Screen : uint8_t { NO_HOUSE, MENU, CHORES_LIST, SHOPPING, MONEY, REMINDER_LIST, MESSAGE_LIST, ROOMMATES,
-                        PICK, AMOUNT, CONFIRM, SYNC };
+                        PICK, AMOUNT, CONFIRM, SYNC, PAY, CASHTAG };
 enum MenuRow : uint8_t { M_CHORES, M_SHOPPING, M_MONEY, M_REMINDERS, M_MESSAGES, M_ROOMMATES, M_SYNC, M_ROWS };
 // What the picker is choosing.
 enum Pick : uint8_t { P_CHORE, P_EVERY, P_ITEM, P_SPENT, P_REMINDER, P_WHEN, P_MESSAGE };
@@ -57,6 +62,14 @@ RTC_DATA_ATTR static uint8_t ask;
 RTC_DATA_ATTR static uint32_t askOrigin, askTo, askPence;  // the record or the payment the question is about
 RTC_DATA_ATTR static uint16_t askSeq;
 RTC_DATA_ATTR static uint8_t digit, digits[5];             // the amount: $ hundreds, tens, units . dimes, cents
+// PAY: whose code is shown (payTo), for how much (payPence, 0 = no amount) and, from Money, who pays (payFrom).
+RTC_DATA_ATTR static uint32_t payTo, payFrom, payPence;
+RTC_DATA_ATTR static char tagPlaces[MAX_CASHTAG + 1];  // CASHTAG: the tag being entered, ' ' where empty
+RTC_DATA_ATTR static uint8_t tagPlace;
+
+// The amount on the end of the link (https://cash.app/$tag/6.50) is the form in common use but not one Cash App
+// documents: if a phone opens Cash App without it, set this to false and the link is just the $cashtag.
+static const bool AMOUNT_IN_LINK = true;
 
 // ---- Rows of the list screens: indexes into the household's records, in display order.
 
@@ -240,7 +253,12 @@ static void drawList() {
     else if (screen == SHOPPING && r.a) strlcpy(right, "got it", sizeof right);
     else if (screen == REMINDER_LIST) scheduleText(r, right, sizeof right);
     else if (screen == MESSAGE_LIST) snprintf(left, sizeof left, "%s: %s", nameOf(h, r.origin), r.text);
-    else if (screen == ROOMMATES && r.origin == h.me) strlcpy(right, "you", sizeof right);
+    else if (screen == ROOMMATES) {
+      const char *tag = payTagOf(h, r.origin);
+      snprintf(right, sizeof right, "%s%s%s%s", r.origin == h.me ? "you" : "", r.origin == h.me && tag ? ", " : "",
+               tag ? "$" : "", tag ? tag : "");
+      if (r.origin == h.me && !tag) strlcpy(right, "you, no $cashtag", sizeof right);
+    }
     drawRow(i - top, i == cursor, left, right);
   }
   if (screen == CHORES_LIST && !today) drawToast("Set the clock (Settings or Sync)");
@@ -251,7 +269,11 @@ static void drawList() {
               onRecord ? "remove" : "");
   else if (screen == REMINDER_LIST) drawHints("next", onRecord ? "" : "add", onRecord ? "remove" : "");
   else if (screen == MESSAGE_LIST) drawHints("next", onRecord ? "" : "pick", onRecord ? "remove" : "");
-  else drawHints("next", "", onRecord && h.r[rows[cursor]].origin != h.me ? "remove" : "");
+  else {
+    const bool self = onRecord && h.r[rows[cursor]].origin == h.me;
+    drawHints("next", self ? "$cashtag" : onRecord && payTagOf(h, h.r[rows[cursor]].origin) ? "Cash App" : "",
+              onRecord && !self ? "remove" : "");
+  }
 }
 
 static void drawMoney() {
@@ -279,7 +301,93 @@ static void drawMoney() {
     drawCentered("Everyone is even", CONTENT_TOP + 3 + 2 * ROW_H + ROW_H / 2);
   }
   const bool onDebt = cursor < nd && (m[d[cursor].from]->origin == h.me || m[d[cursor].to]->origin == h.me);
-  drawHints("next", cursor == nd ? "add" : onDebt ? "settled" : "", "");
+  drawHints("next", cursor == nd ? "add" : onDebt ? (payTagOf(h, m[d[cursor].to]->origin) ? "pay" : "settled") : "",
+            "");
+}
+
+// A $cashtag's Cash App link as a QR code (version 3: 29 modules, 3 px each, about 1 cm on the X4), the $cashtag and
+// the amount under it.
+static void drawPay() {
+  House &h = houseData();
+  const char *tag = payTagOf(h, payTo);
+  char title[32];
+  snprintf(title, sizeof title, "Pay %s", payTo == h.me ? "you" : nameOf(h, payTo));
+  drawHeader(title);
+  if (!tag) {
+    drawEmpty("No $cashtag yet", payTo == h.me ? "Set yours on Roommates" : "They set it on their unidex,",
+              payTo == h.me ? "(B on yourself)." : "then Sync.");
+    drawHints("", payFrom ? "settled" : "", "");
+    return;
+  }
+  char link[64];
+  cashAppLink(tag, payPence, AMOUNT_IN_LINK, link, sizeof link);
+  QRCode qr;
+  uint8_t modules[qrcode_getBufferSize(3)];
+  if (qrcode_initText(&qr, modules, 3, ECC_LOW, link) == 0) {
+    const int scale = 3, x0 = (display.width() - qr.size * scale) / 2, y0 = CONTENT_TOP + 5;
+    for (uint8_t y = 0; y < qr.size; y++)
+      for (uint8_t x = 0; x < qr.size; x++)
+        if (qrcode_getModule(&qr, x, y)) display.fillRect(x0 + x * scale, y0 + y * scale, scale, scale, BLACK);
+  }
+  char line[48], amount[16];
+  if (payPence) {
+    houseFormatMoney(payPence, amount, sizeof amount);
+    snprintf(line, sizeof line, "$%s  %s", tag, amount);
+  } else {
+    snprintf(line, sizeof line, "$%s", tag);
+  }
+  display.setFont(FONT_SMALL);
+  drawCenteredLine(line, CONTENT_TOP + 5 + 29 * 3 + 18);
+  display.setFont(FONT_TINY);
+  drawCenteredLine(payTo == h.me ? "They scan this to pay you" : "Scan with your phone's camera",
+                   CONTENT_TOP + 5 + 29 * 3 + 33);
+  drawHints("", payFrom ? "settled" : "", "");
+}
+
+// Entering this device's $cashtag a place at a time: A (and hold B) change the letter, B moves on, and on an empty
+// place with nothing after it, saves.
+static bool tagDoneAt(int pos) {
+  if (pos >= (int)MAX_CASHTAG - 1) return true;
+  for (int i = pos; i < (int)MAX_CASHTAG; i++)
+    if (tagPlaces[i] != ' ') return false;
+  return true;
+}
+
+static void tagFromPlaces(char *out) {
+  int n = 0;
+  for (int i = 0; i < (int)MAX_CASHTAG; i++)
+    if (tagPlaces[i] != ' ') out[n++] = tagPlaces[i];
+  out[n] = 0;
+}
+
+static void drawCashtag() {
+  drawHeader("Your $cashtag");
+  display.setFont(FONT_SMALL);
+  drawCenteredLine("So roommates can pay you", CONTENT_TOP + 18);
+  // The places, $ first, the current one boxed; empty places after the cursor aren't drawn.
+  int last = tagPlace;
+  for (int i = 0; i < (int)MAX_CASHTAG; i++)
+    if (tagPlaces[i] != ' ' && i > last) last = i;
+  char shown[MAX_CASHTAG + 2] = "$";
+  for (int i = 0; i <= last; i++) shown[i + 1] = tagPlaces[i] == ' ' ? '_' : tagPlaces[i];
+  shown[last + 2] = 0;
+  const int16_t base = CONTENT_TOP + 60;
+  int16_t x = (display.width() - textWidth(shown)) / 2;
+  for (int i = 0; shown[i]; i++) {
+    const char one[2] = {shown[i], 0};
+    const int16_t w = textWidth(one);
+    if (i == tagPlace + 1) {
+      display.fillRect(x - 1, base - 14, w + 2, 19, BLACK);
+      display.setTextColor(WHITE);
+    }
+    display.setCursor(x, base);
+    display.print(one);
+    display.setTextColor(BLACK);
+    x = display.getCursorX();  // the font's own advance
+  }
+  display.setFont(FONT_TINY);
+  drawCenteredLine(tagDoneAt(tagPlace) ? "B: save (all empty: none)" : "B: next letter", CONTENT_TOP + 92);
+  drawHints("letter", tagDoneAt(tagPlace) ? "save" : "next", "previous letter");
 }
 
 static int pickCount() {
@@ -567,6 +675,8 @@ static void draw() {
     case AMOUNT: return drawAmount();
     case CONFIRM: return drawConfirm();
     case SYNC: return drawSync();
+    case PAY: return drawPay();
+    case CASHTAG: return drawCashtag();
     default: listRecords(); return drawList();
   }
 }
@@ -669,6 +779,23 @@ static Redraw listButton(Event e) {
     return Redraw::Partial;
   }
   if (e != Event::BShort) return Redraw::None;
+  if (screen == ROOMMATES && r && r->origin == h.me) {  // your own $cashtag
+    const char *tag = payTagOf(h, h.me);
+    memset(tagPlaces, ' ', MAX_CASHTAG);
+    tagPlaces[MAX_CASHTAG] = 0;
+    for (int i = 0; tag && tag[i] && i < (int)MAX_CASHTAG; i++) tagPlaces[i] = tag[i] >= 'A' && tag[i] <= 'Z' ? tag[i] + 32 : tag[i];
+    tagPlace = 0;
+    back = ROOMMATES;
+    screen = CASHTAG;
+    return Redraw::Partial;
+  }
+  if (screen == ROOMMATES && r) {  // a roommate's code, to pay them anything
+    if (!payTagOf(h, r->origin)) return Redraw::None;
+    payTo = r->origin, payFrom = 0, payPence = 0;
+    back = ROOMMATES;
+    screen = PAY;
+    return Redraw::Full;
+  }
   if (!r) {
     if (screen == SHOPPING && cursor == rowCount + 1) {
       askAbout(A_CLEAR_BOUGHT, nullptr);
@@ -758,12 +885,53 @@ static Redraw onButton(Event e) {
         return Redraw::Partial;
       }
       if (m[d[cursor].from]->origin != h.me && m[d[cursor].to]->origin != h.me) return Redraw::None;
+      payFrom = m[d[cursor].from]->origin;
+      payTo = m[d[cursor].to]->origin;
+      payPence = d[cursor].pence;
+      if (payTagOf(h, payTo)) {  // whoever is owed has a $cashtag: show it first, then "settled?"
+        back = MONEY;
+        screen = PAY;
+        return Redraw::Full;
+      }
       askAbout(A_SETTLE, nullptr);
-      askOrigin = m[d[cursor].from]->origin;  // who paid
-      askTo = m[d[cursor].to]->origin;
-      askPence = d[cursor].pence;
+      askOrigin = payFrom;  // who paid
+      askTo = payTo;
+      askPence = payPence;
       return Redraw::Partial;
     }
+    case PAY:
+      if (e != Event::BShort || !payFrom) return Redraw::None;
+      screen = MONEY;
+      askAbout(A_SETTLE, nullptr);
+      askOrigin = payFrom;
+      askTo = payTo;
+      askPence = payPence;
+      return Redraw::Full;
+    case CASHTAG:
+      if (e == Event::AShort || e == Event::BLong) {
+        const char *at = strchr(CASHTAG_CHARS, tagPlaces[tagPlace]);
+        const int n = sizeof CASHTAG_CHARS - 1, i = at ? (int)(at - CASHTAG_CHARS) : 0;
+        tagPlaces[tagPlace] = CASHTAG_CHARS[((i + (e == Event::AShort ? 1 : -1)) % n + n) % n];
+        return Redraw::Partial;
+      }
+      if (e != Event::BShort) return Redraw::None;
+      if (!tagDoneAt(tagPlace)) {
+        tagPlace++;
+        return Redraw::Partial;
+      }
+      {
+        char tag[MAX_CASHTAG + 1];
+        tagFromPlaces(tag);
+        if (!setPayTag(h, tag)) {
+          launcherToast("Needs a letter in it");
+          tagPlace = 0;
+          return Redraw::Partial;
+        }
+        houseSave();
+        launcherToast(tag[0] ? "Shared at the next Sync" : "$cashtag removed");
+      }
+      open(ROOMMATES);
+      return Redraw::Full;
     case PICK: {
       const int n = pickCount();
       if (e == Event::AShort || e == Event::BLong) {
@@ -839,6 +1007,8 @@ static Redraw onBack() {
     case PICK:
     case AMOUNT:
     case CONFIRM:
+    case PAY:
+    case CASHTAG:  // leaves without saving
       open(back);
       return Redraw::Full;
     case MENU:
