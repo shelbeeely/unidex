@@ -14,6 +14,26 @@ LAYERS, ORDER, EXAMPLES, DROPS, RARITIES = (const("LAYERS"), const("DRAW_ORDER")
                                             const("RARITIES"))
 GLYPHS, CHARS = const("PIN_GLYPHS"), const("PIN_CHARS")
 FLAGS, CHEVRON, RING = const("FLAGS"), const("FLAG_CHEVRON"), const("FLAG_RING")
+ITEMS = json.loads(re.search(r"export const ITEMS = (.*?);\n", open(os.path.join(root, "site/x4/items.js")).read()).group(1))
+ITEM_BITS = {i["name"]: bytes.fromhex(i["bits"]) for i in ITEMS}
+
+def held(img, name, scale):
+    """What a Pet holds, as items_logic.h's drawHeld: x 16-31, y 16-31, a paper edge round the ink."""
+    bits = ITEM_BITS.get(name)
+    if not bits:
+        return
+    d = ImageDraw.Draw(img)
+    ink = lambda x, y: 0 <= x < 16 and 0 <= y < 16 and bits[y * 2 + x // 8] >> (7 - x % 8) & 1
+    for y in range(-1, 17):
+        for x in range(-1, 17):
+            px, py = 16 + x, 16 + y
+            if not (0 <= px < 32 and 0 <= py < 32):
+                continue
+            here = ink(x, y)
+            near = any(ink(x + dx, y + dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1))
+            if here or near:
+                d.rectangle([px * scale, py * scale, px * scale + scale - 1, py * scale + scale - 1],
+                            fill=INK if here else PAPER)
 
 def flag_colour(f, x, y, w, h):
     """flags.h's colourAt."""
@@ -82,6 +102,7 @@ d = ImageDraw.Draw(img)
 for i, ex in enumerate(EXAMPLES):
     x = pad + i * (tile + pad)
     p = pet(ex["parts"], scale).convert("RGB")
+    held(p, ex.get("held"), scale)  # under the pin, as on the X4
     if ex["pin"] == "pronouns":
         pin(p, ex["pronouns"], scale)
     elif ex["pin"] == "flag":
@@ -133,4 +154,19 @@ for i, fl in enumerate(FLAGS[1:]):
     tw = d.textlength(fl["name"], font=font(18))
     d.text((x + (fw - tw) / 2, y + fh + 5), fl["name"], fill=INK, font=font(18))
 img.save(os.path.join(root, "docs/roomiepet-flags.png"), optimize=True)
-print("wrote docs/roomiepet-pets.png, docs/roomiepet-wardrobe.png and docs/roomiepet-flags.png")
+# The things to hold, each in a Pet's hand, named.
+scale, pad, cell, name_h, cols = 3, 10, 96, 22, 12
+rows = -(-len(ITEMS) // cols)
+img = Image.new("RGB", (pad + cols * (cell + pad), pad + rows * (cell + name_h + pad)), PAPER)
+d = ImageDraw.Draw(img)
+for i, it in enumerate(ITEMS):
+    x, y = pad + i % cols * (cell + pad), pad + i // cols * (cell + name_h + pad)
+    look = list(DEFAULT)
+    look[4] = 0
+    p = pet(look, scale).convert("RGB")
+    held(p, it["name"], scale)
+    img.paste(p, (x, y))
+    tw = d.textlength(it["name"], font=font(13))
+    d.text((x + (cell - tw) / 2, y + cell + 3), it["name"], fill=INK, font=font(13))
+img.save(os.path.join(root, "docs/roomiepet-items.png"), optimize=True)
+print("wrote docs/roomiepet-pets.png, docs/roomiepet-wardrobe.png, docs/roomiepet-flags.png and docs/roomiepet-items.png")

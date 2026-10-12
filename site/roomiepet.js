@@ -2,6 +2,8 @@
 // parts as the X4 (x4/pet-art.js, generated from the firmware by tools/pet/export.py; x4/pin.js draws pins and flags).
 import { LAYERS, DRAW_ORDER, EXAMPLES, PRONOUNS, FLAGS, DROPS, RARITIES } from './x4/pet-art.js';
 import { drawPin, drawFlag, drawFlagInk, ON_PIN } from './x4/pin.js';
+import { drawHeld, bytesOf } from './x4/held.js';
+import { ITEMS } from './x4/items.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
@@ -9,7 +11,9 @@ const DEFAULT = [0, 0, 0, 0, 1, 0, 0];
 const ROWS = [6, 5, 3, 4, 0, 1, 2];  // as on the X4: clothes first
 const rarity = (layer, part) => (DROPS.find(d => d.layer === layer && d.part === part) || {}).rarity || 0;  // 0: a starter
 
-function draw(canvas, look, pronouns = '', pin = false, flag = 0) {
+const ITEM_BITS = Object.fromEntries(ITEMS.map(i => [i.name, bytesOf(i.bits)]));
+
+function draw(canvas, look, pronouns = '', pin = false, flag = 0, held = null) {
   const ctx = canvas.getContext('2d'), s = canvas.width / 32;
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -22,13 +26,14 @@ function draw(canvas, look, pronouns = '', pin = false, flag = 0) {
       ctx.fillRect(x * s, y * s, s, s);
     }));
   }
-  if (pin) drawPin(ctx, pronouns, s, flag);
+  if (held && ITEM_BITS[held]) drawHeld(ctx, ITEM_BITS[held], s);
+  if (pin) drawPin(ctx, pronouns, s, flag);  // over what it holds, as on the X4
 }
 
-function canvas(look, pronouns, pin, flag) {
+function canvas(look, pronouns, pin, flag, held) {
   const c = document.createElement('canvas');
   c.width = c.height = 128;
-  draw(c, look, pronouns, pin, flag);
+  draw(c, look, pronouns, pin, flag, held);
   return c;
 }
 
@@ -39,13 +44,14 @@ for (const ex of EXAMPLES) {
   b.className = 'pet';
   b.title = 'Try it on';
   const flagByte = ex.flag | (ex.pin === 'flag' ? ON_PIN : 0);
-  b.appendChild(canvas(ex.parts, ex.pronouns, !!ex.pin, flagByte));
+  b.appendChild(canvas(ex.parts, ex.pronouns, !!ex.pin, flagByte, ex.held));
   const names = ROWS.slice(0, 4).map(l => ex.parts[l] ? LAYERS[l].parts[ex.parts[l]].name : null).filter(Boolean);
   b.insertAdjacentHTML('beforeend', `<b>${esc(ex.pronouns)} · ${esc(FLAGS[ex.flag].name)}</b><small>${esc(names.join(', '))}</small>`);
   b.onclick = () => {
     look = [...ex.parts];
     pronouns = ex.pronouns;
     flag = ex.flag;
+    held = ex.held || '';
     $('tryPin').value = ex.pin || 'off';
     update();
     $('tryPet').scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -55,7 +61,7 @@ for (const ex of EXAMPLES) {
 
 // ---- Dress up: a picker a layer, the pronouns and the pin.
 
-let look = [...DEFAULT], pronouns = 'they/them', flag = 1;
+let look = [...DEFAULT], pronouns = 'they/them', flag = 1, held = 'Broom';
 const pickers = ROWS.map(layer => {
   const label = document.createElement('label');
   label.textContent = LAYERS[layer].name;
@@ -71,9 +77,12 @@ $('tryPronouns').onchange = () => { pronouns = $('tryPronouns').value; update();
 FLAGS.forEach((f, i) => $('tryFlag').add(new Option(f.name, i)));
 $('tryFlag').onchange = () => { flag = +$('tryFlag').value; update(); };
 $('tryPin').onchange = update;
+for (const n of ['', ...ITEMS.map(i => i.name)]) $('tryHeld').add(new Option(n || 'Nothing', n));
+$('tryHeld').onchange = () => { held = $('tryHeld').value; update(); };
 function update() {
   const pin = $('tryPin').value;
-  draw($('tryPet'), look, pronouns, pin !== 'off', flag | (pin === 'flag' ? ON_PIN : 0));
+  draw($('tryPet'), look, pronouns, pin !== 'off', flag | (pin === 'flag' ? ON_PIN : 0), held);
+  $('tryHeld').value = held;
   for (const [layer, sel] of pickers) sel.value = look[layer];
   $('tryPronouns').value = pronouns;
   $('tryFlag').value = flag;
@@ -96,6 +105,16 @@ FLAGS.forEach((f, i) => {
   card.insertAdjacentHTML('beforeend', `<b>${esc(f.name)}</b>`);
   $('flags').appendChild(card);
 });
+
+// ---- Things to hold: the X4's catalog (catalog/items.txt), each in a Pet's hand.
+
+for (const it of ITEMS) {
+  const cell = document.createElement('div');
+  cell.className = 'pet';
+  cell.appendChild(canvas([...DEFAULT], '', false, 0, it.name));
+  cell.insertAdjacentHTML('beforeend', `<b>${esc(it.name)}</b>`);
+  $('items').appendChild(cell);
+}
 
 // ---- The wardrobe: every part on the plain blob, by layer.
 

@@ -5,6 +5,7 @@
 #include "send_logic.h"
 #include "../badge/badge_file.h"
 #include "pet.h"
+#include "held.h"
 #include "../../core/clock.h"
 #include "../../core/devtools.h"
 #include "../../core/display.h"
@@ -135,7 +136,7 @@ static uint32_t clockNow() { return clockValid() ? (uint32_t)time(nullptr) : 0; 
 
 // A friend met (again): counted, look and name brought up to date, saved.
 static void meetFriend(const meet::Nearby &who) {
-  friendsList().meet(who.id, who.look, who.name, clockNow(), who.pronouns, who.flag);
+  friendsList().meet(who.id, who.look, who.name, clockNow(), who.pronouns, who.flag, who.held);
   saveFriends();
 }
 
@@ -190,8 +191,9 @@ static void drawPet(int i, const meet::Actor &a, bool blink) {
   const char *name = me ? myName.c_str() : partner.name;
   const char *pronouns = me ? myPronouns.c_str() : partner.pronouns;
   const uint8_t flag = me ? petFlag() : partner.flag;
+  const uint32_t held = me ? petHeld() : partner.held;
   const PetMood mood = a.mood == meet::HAPPY ? PetMood::Happy : blink ? PetMood::Blink : PetMood::Normal;
-  petDraw(me ? petLookBits() : partner.look, SCALE, sx, y, mood, pronouns, flag);
+  petDraw(me ? petLookBits() : partner.look, SCALE, sx, y, mood, pronouns, flag, held);
   if (mid < 0 || mid >= display.width()) return;
   petDrawTag(tagText(name, pronouns).c_str(), mid, y - 3, flag);
   if (a.bang) drawBang(sx + SIZE - 4, y - 24);
@@ -470,10 +472,13 @@ static void sayHello() {
   strlcpy(h.name, petName().c_str(), sizeof h.name);
   strlcpy(h.pronouns, petPronouns().c_str(), sizeof h.pronouns);
   h.flag = petFlag();
+  h.held = petHeld();
+  h.items = itemsDigest();
   const int best = nearby.strongest();  // tell it how strongly it's heard here, so both can use both directions
   if (best >= 0) h.heard = meet::packHeard(nearby.at(best).id, nearby.median(best));
   uint8_t packet[meet::HELLO_LEN];
   linkBroadcast(packet, meet::encodeHello(h, packet));
+  itemsBeat();  // and a thing to hold, while someone nearby has a different catalog (held.h)
 }
 
 static void keepAlive() {
@@ -636,8 +641,10 @@ Redraw meetTick() {
   meet::Message act = {}, ask = {};
   uint32_t actAt = 0, connectFrom = 0;
   while (linkPoll(p)) {
-    if (meet::decodeHello(p.data, p.len, h)) {
-      if (h.id != myId()) changed |= nearby.heard(h, p.mac, now, p.rssi, myId());
+    if (itemsHeard(p.data, p.len)) {  // a thing to hold, passed on (held.h)
+      changed = true;
+    } else if (meet::decodeHello(p.data, p.len, h)) {
+      if (h.id != myId()) changed |= nearby.heard(h, p.mac, now, p.rssi, myId()), itemsNoteDigest(h.items);
     } else if (meet::decodeMessage(p.data, p.len, m) && m.to == myId() && (int32_t)(p.at - lastActAt) > 0) {
       // (Each message is sent three times; copies that came in before the last act ended are old news.)
       if (m.type == meet::CONNECT && !connected && nearby.find(m.from) >= 0) connectFrom = m.from;
@@ -695,7 +702,7 @@ Redraw meetTick() {
       if (look) {
         memcpy(partner.name, nearby.at(i).name, sizeof partner.name), partner.look = nearby.at(i).look;
         memcpy(partner.pronouns, nearby.at(i).pronouns, sizeof partner.pronouns);
-        partner.flag = nearby.at(i).flag;
+        partner.flag = nearby.at(i).flag, partner.held = nearby.at(i).held;
       }
       changed = look;
     }
@@ -772,7 +779,7 @@ static void drawFriends() {
   drawCentered(when, CONTENT_TOP + 9);
   const int16_t x = (display.width() - SIZE) / 2;
 #if UNIDEX_X4
-  petDraw(f.look, SCALE, x, PY, PetMood::Normal, f.pronouns, f.flag);
+  petDraw(f.look, SCALE, x, PY, PetMood::Normal, f.pronouns, f.flag, f.held);
   petDrawTag(tagText(f.name, f.pronouns).c_str(), x + SIZE / 2, PY - 3, f.flag);
 #else
   petDraw(f.look, SCALE, x, PY);

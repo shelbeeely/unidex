@@ -8,6 +8,8 @@
 
 import { LAYERS as ART, DRAW_ORDER, BITS, PRONOUNS, FLAGS } from './pet-art.js';
 import { drawPin, drawFlag, cleanPronouns, ON_PIN, flagIndex } from './pin.js';
+import { drawHeld, bitsFromImage, bytesOf, hexOf } from './held.js';
+import { KENNEY } from './items.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
@@ -189,7 +191,7 @@ const ordinal = n => n + (n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !=
 
 // ---- Views
 
-const TABS = [['home', 'Home'], ['pet', 'Pet'], ['chores', 'Chores'], ['shopping', 'Shopping'], ['money', 'Money'],
+const TABS = [['home', 'Home'], ['pet', 'Pet'], ['items', 'Items'], ['chores', 'Chores'], ['shopping', 'Shopping'], ['money', 'Money'],
   ['reminders', 'Reminders'], ['messages', 'Messages'], ['roommates', 'Roommates'], ['badges', 'Badges'],
   ['timetable', 'Timetable'], ['settings', 'Settings']];
 let tab = 'home';
@@ -197,7 +199,7 @@ let tab = 'home';
 function render() {
   $('tabs').innerHTML = TABS.map(([k, n]) => `<button data-tab="${k}" class="${k === tab ? 'on' : ''}">${n}</button>`).join('');
   const view = VIEWS[tab];
-  $('main').innerHTML = S && !S.id && !['pet', 'badges', 'timetable', 'settings'].includes(tab) ? noHouse() : view();
+  $('main').innerHTML = S && !S.id && !['pet', 'items', 'badges', 'timetable', 'settings'].includes(tab) ? noHouse() : view();
   paintPets();
 }
 
@@ -208,6 +210,7 @@ function noHouse() {
 
 const VIEWS = {
   pet: () => designer(),
+  items: () => itemsPage(),
   home() {
     const t = today().day, mine = recs(KIND.CHORE).filter(c => c.turn === S.me && c.b <= t);
     const late = recs(KIND.CHORE).filter(c => c.overdue);
@@ -300,7 +303,7 @@ const VIEWS = {
     return `<h2>Roommates</h2>
       ${S.members.map(m => {
         const link = m.id !== S.me && payLink(m, 0, S.me);
-        return `<div class="card"><div class="row"><canvas class="mini" data-look="${m.look}" data-pronouns="${esc(m.pronouns || '')}" data-flag-byte="${m.flag || 0}" width="96" height="96"></canvas>
+        return `<div class="card"><div class="row"><canvas class="mini" data-look="${m.look}" data-pronouns="${esc(m.pronouns || '')}" data-flag-byte="${m.flag || 0}" data-held="${m.held || 0}" width="96" height="96"></canvas>
           <div class="grow"><div class="title">${withPronouns(m.name, m.pronouns, m.flag)}${m.id === S.me ? ' · you' : ''}</div>
           <div class="sub">${m.tag ? '$' + esc(m.tag) : 'No $cashtag'} · ${m.balance > 0 ? 'owed ' + money(m.balance) : m.balance < 0 ? 'owes ' + money(-m.balance) : 'even'}</div></div>
           ${link ? `<a class="b cash" href="${esc(link.url)}">Cash App</a><button class="b" data-act="shareMember" data-id="${m.id}">Share</button>` : ''}</div></div>`;
@@ -364,17 +367,20 @@ const owned = (layer, index) => { const p = partInfo(layer, index); return !p ||
 const offered = layer => ART[layer].parts.map((_, i) => i).filter(i => owned(layer, i));
 // What's being designed: the parts, the pin, the name, the pronouns and the layer shown in the strip. Starts as what
 // the X4 wears; Load puts that back.
-const design = { parts: null, pin: false, name: '', pronouns: '', flag: 0, strip: 6 };  // flag: the flag byte
+// held: an item id (0: nothing); strip: a layer, or 'held' for the things to hold.
+const design = { parts: null, pin: false, name: '', pronouns: '', flag: 0, held: 0, strip: 6 };  // flag: the flag byte
+const itemOf = id => info.items.find(i => i.id === id);
 function loadDesign() {
   design.parts = lookParts(info.pet.look).map((p, i) => (p < ART[i].parts.length ? p : 0));
   design.pin = lookPin(info.pet.look);
   design.name = info.pet.name || '';
   design.pronouns = info.pet.pronouns || '';
   design.flag = info.pet.flag || 0;
+  design.held = info.pet.held || 0;
 }
 const pinShows = () => (!design.pin ? 'off' : design.flag & ON_PIN ? 'flag' : 'pronouns');
 
-function drawPet(canvas, parts, pin, pronouns, flag = 0) {
+function drawPet(canvas, parts, pin, pronouns, flag = 0, held = 0) {
   const ctx = canvas.getContext('2d'), s = canvas.width / 32;
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -386,7 +392,8 @@ function drawPet(canvas, parts, pin, pronouns, flag = 0) {
       ctx.fillRect(x * s, y * s, s, s);
     }));
   }
-  if (pin) drawPin(ctx, pronouns, s, flag);
+  if (held && itemOf(held)) drawHeld(ctx, itemOf(held).bits, s);
+  if (pin) drawPin(ctx, pronouns, s, flag);  // over what it holds, as on the X4
 }
 // Name with the pride flag before it and pronouns after it, as the X4 shows them: "[flag] Pip (she/her)".
 const withPronouns = (name, pronouns, flag) => (flagIndex(flag) ? `<canvas class="flag" data-flag="${flag}" width="48" height="30"></canvas> ` : '') +
@@ -402,8 +409,17 @@ function designer() {
       <button class="b" data-act="pStep" data-l="${layer}" data-s="-1" aria-label="Previous ${LAYERS[layer]}">◀</button>
       <span>${esc(p.name)}${r ? ` <i class="rar r${r}">${RARITY[r]}</i>` : ''}<small>${at + 1}/${list.length}</small></span>
       <button class="b" data-act="pStep" data-l="${layer}" data-s="1" aria-label="Next ${LAYERS[layer]}">▶</button></div>`;
-  }).join('');
-  const strip = ART[d.strip].parts.map((p, i) => {
+  }).join('') + (() => {  // what it holds: nothing, then the X4's catalog (the Items tab adds to it)
+    const at = info.items.findIndex(i => i.id === d.held);
+    return `<div class="petRow${d.strip === 'held' ? ' on' : ''}"><button class="b lab" data-act="pStrip" data-l="held">Holding</button>
+      <button class="b" data-act="pHeld" data-s="-1" aria-label="Previous thing to hold">◀</button>
+      <span>${at < 0 ? 'Nothing' : esc(info.items[at].name)}<small>${at + 1}/${info.items.length}</small></span>
+      <button class="b" data-act="pHeld" data-s="1" aria-label="Next thing to hold">▶</button></div>`;
+  })();
+  const strip = d.strip === 'held' ? [{ id: 0, name: 'Nothing' }, ...info.items].map(it =>
+    `<button class="tile${it.id === d.held ? ' on' : ''}" data-act="pHold" data-id="${it.id}" title="${esc(it.name)}">
+      <canvas data-held-tile="${it.id}" width="64" height="64"></canvas><span>${esc(it.name)}</span></button>`).join('') :
+    ART[d.strip].parts.map((p, i) => {
     const r = partInfo(d.strip, i)?.rarity, has = owned(d.strip, i);
     return `<button class="tile${i === d.parts[d.strip] ? ' on' : ''}${has ? '' : ' locked'}" data-act="pPick" data-l="${d.strip}" data-i="${i}"
       ${has ? '' : 'disabled'} title="${esc(p.name)}${r ? ' (' + RARITY[r] + (has ? '' : ', not found yet') + ')' : ''}"><canvas data-tile="${i}" width="64" height="64"></canvas>
@@ -431,14 +447,79 @@ function designer() {
     <p class="note">Your pronouns and flag show beside your Pet's name on the X4, to Pets you meet and in their friends
       lists, and on your household's Roommates; a pin shows one of them on your Pet too. The X4 draws flags in black and
       white, each colour a texture.</p>
-    <h3>${LAYERS[d.strip]}</h3>
+    <h3>${d.strip === 'held' ? `Things to hold <span class="sub">(${info.items.length}: more on the <a href="#" data-tab="items">Items</a> tab)</span>` : LAYERS[d.strip]}</h3>
     <div class="strip">${strip}</div>`;
+}
+
+// ---- The Items tab: the things this X4's Pet can hold, and adding more, from Kenney's 1-Bit Pack (kenney.png, every
+// tile; tap one) or any picture. "I ADD" puts it on the X4, which passes it on to every X4 it syncs with or meets.
+const adding = { kenney: null, own: null };  // the picture picked for each form (32 bytes), and its tile number
+function itemsPage() {
+  const added = info.items.filter(i => i.added).length;
+  return `<h2>Things to hold</h2>
+    <p class="note">This X4 has ${info.items.length}: ${info.items.length - added} from its firmware and ${added} added. What
+      you add goes to the X4 straight away, and from there to every X4 it syncs with or meets (one radio message each),
+      so your roommates get it too.</p>
+    <div class="card"><div class="title">Add from Kenney's 1-Bit Pack</div>
+      <p class="note">${KENNEY.count} free pixel pictures (CC0, <a href="https://kenney.nl/assets/1-bit-pack">kenney.nl</a>). Tap one, name it, add it.</p>
+      <div class="kenney"><img id="kenneySheet" src="kenney.png" alt="Kenney's 1-Bit Pack: tap a picture" draggable="false"></div>
+      <form class="add" data-form="addKenney"><canvas id="kenneyPick" class="mini" width="64" height="64"></canvas>
+        <label>Name<input name="name" maxlength="12" required placeholder="${adding.kenney ? '' : 'Tap a picture first'}"></label>
+        <button class="b p">Add to the X4</button></form></div>
+    <div class="card"><div class="title">Add your own picture</div>
+      <p class="note">Any picture: it's cropped to what's drawn, shrunk to 16 x 16 and made black and white (transparent
+        or white is paper). Simple shapes with thick lines work best.</p>
+      <form class="add" data-form="addOwn"><input type="file" accept="image/*" id="ownFile" aria-label="Picture">
+        <canvas id="ownPick" class="mini" width="64" height="64"></canvas>
+        <label>Name<input name="name" maxlength="12" required></label><button class="b p">Add to the X4</button></form></div>
+    <h3>On this X4</h3>
+    <div class="strip">${info.items.map(it => `<div class="tile"><canvas data-item="${it.id}" width="64" height="64"></canvas>
+      <span>${esc(it.name)}</span>${it.added ? `<button class="b" data-act="itemDel" data-id="${it.id}">Remove</button>` : ''}</div>`).join('')}</div>`;
+}
+function paintPick(id, bits) {
+  const c = $(id);
+  if (!c) return;
+  const g = c.getContext('2d');
+  g.fillStyle = '#fff', g.fillRect(0, 0, c.width, c.height);
+  if (bits) drawHeld(g, bits, c.width / 16, true);
+}
+document.addEventListener('click', e => {
+  if (e.target.id !== 'kenneySheet') return;
+  const img = e.target, r = img.getBoundingClientRect();
+  const col = Math.floor((e.clientX - r.left) / r.width * img.naturalWidth / KENNEY.tile);
+  const row = Math.floor((e.clientY - r.top) / r.height * img.naturalHeight / KENNEY.tile);
+  adding.kenney = bitsFromImage(img, { whiteIsInk: true, sx: col * KENNEY.tile, sy: row * KENNEY.tile, sw: KENNEY.tile, sh: KENNEY.tile });
+  paintPick('kenneyPick', adding.kenney);
+  const name = document.querySelector('form[data-form=addKenney] [name=name]');
+  name.placeholder = 'Name it', name.focus();
+});
+document.addEventListener('change', e => {
+  if (e.target.id !== 'ownFile' || !e.target.files[0]) return;
+  const img = new Image();
+  img.onload = () => { adding.own = bitsFromImage(img); paintPick('ownPick', adding.own); URL.revokeObjectURL(img.src); };
+  img.src = URL.createObjectURL(e.target.files[0]);
+});
+async function addItem(name, bits) {
+  name = name.replace(/[^\x20-\x7e]/g, '').trim().slice(0, 12);
+  if (!bits || !bits.some(b => b)) return toast('Pick a picture first');
+  if (!name) return toast('Give it a name');
+  ok(await run(`I ADD ${toHex(enc.encode(name))} ${hexOf(bits)}`), 'OK I ADD');
+  await readExtras();
+  render();
+  toast(`${name} added: your roommates get it at the next Sync`);
 }
 
 // Every Pet on the page: the designer's preview and strip, and the roommates' Pets (canvas[data-look]).
 function paintPets() {
   const c = $('petPreview');
-  if (c) drawPet(c, design.parts, design.pin, design.pronouns, design.flag);
+  if (c) drawPet(c, design.parts, design.pin, design.pronouns, design.flag, design.held);
+  document.querySelectorAll('canvas[data-held-tile]').forEach(t => drawPet(t, design.parts, false, '', 0, +t.dataset.heldTile));
+  document.querySelectorAll('canvas[data-item]').forEach(t => {
+    const g = t.getContext('2d');
+    g.fillStyle = '#fff', g.fillRect(0, 0, t.width, t.height);
+    const it = itemOf(+t.dataset.item);
+    if (it) drawHeld(g, it.bits, t.width / 16, true);
+  });
   document.querySelectorAll('canvas[data-tile]').forEach(t => {
     const parts = [...design.parts];
     parts[design.strip] = +t.dataset.tile;
@@ -446,7 +527,7 @@ function paintPets() {
   });
   document.querySelectorAll('canvas[data-look]').forEach(t => {
     const hex = (+t.dataset.look >>> 0).toString(16);
-    drawPet(t, lookParts(hex), lookPin(hex), t.dataset.pronouns || '', +t.dataset.flagByte || 0);
+    drawPet(t, lookParts(hex), lookPin(hex), t.dataset.pronouns || '', +t.dataset.flagByte || 0, +t.dataset.held || 0);
   });
   document.querySelectorAll('canvas[data-flag]').forEach(t => drawFlag(t.getContext('2d'), +t.dataset.flag, 0, 0, t.width, t.height));
 }
@@ -478,14 +559,30 @@ const PET_ACTIONS = {
     design.strip = layer;
   },
   pPick: d => { design.parts[+d.l] = +d.i; },
-  pStrip: d => { design.strip = +d.l; },
-  pRandom: () => { design.parts = design.parts.map((_, layer) => { const l = offered(layer); return l[Math.floor(Math.random() * l.length)]; }); },
+  itemDel: async d => {
+    if (!confirm('Remove it from this X4? (X4s it was passed on to keep theirs.)')) return;
+    ok(await run('I DEL ' + (+d.id).toString(16)), 'OK I DEL');
+    await readExtras();
+  },
+  pStrip: d => { design.strip = d.l === 'held' ? 'held' : +d.l; },
+  pHeld: d => {
+    const ids = [0, ...info.items.map(i => i.id)], at = Math.max(0, ids.indexOf(design.held));
+    design.held = ids[(at + +d.s + ids.length) % ids.length];
+    design.strip = 'held';
+  },
+  pHold: d => { design.held = +d.id; },
+  pRandom: () => {
+    design.parts = design.parts.map((_, layer) => { const l = offered(layer); return l[Math.floor(Math.random() * l.length)]; });
+    const ids = [0, ...info.items.map(i => i.id)];
+    design.held = ids[Math.floor(Math.random() * ids.length)];
+  },
   pLoad: async () => { await readExtras(); loadDesign(); toast('Loaded what your Pet is wearing'); },
   pWear: async () => {
     const name = design.name.replace(/[^\x20-\x7e]/g, '').trim().slice(0, 12), pr = cleanPronouns(design.pronouns);
     const hex = t => (t ? toHex(enc.encode(t)) : '-');
     const flag = (flagIndex(design.flag) ? design.flag : 0).toString(16).padStart(2, '0');
-    ok(await run(`P SET ${lookHex(design.parts, design.pin)} ${hex(name)} ${hex(pr)} ${flag}`), 'OK P SET');
+    const held = (itemOf(design.held) ? design.held : 0).toString(16).padStart(6, '0');
+    ok(await run(`P SET ${lookHex(design.parts, design.pin)} ${hex(name)} ${hex(pr)} ${flag} ${held}`), 'OK P SET');
     await readExtras();
     await readHouse();  // its member card (name, look, pronouns), as roommates will see it
     loadDesign();
@@ -590,6 +687,8 @@ function saveTimetableEdits() {
 }
 
 const FORMS = {
+  addKenney: f => addItem(f.name.value, adding.kenney),
+  addOwn: f => addItem(f.name.value, adding.own),
   chore: f => change(() => (putText(f.text.value.trim()), wasm.add_chore(+f.every.value, dayOf(f.due.value))), 'Chore added'),
   item: f => change(() => (putText(f.text.value.trim()), wasm.add_item()), 'On the list'),
   expense: f => {
@@ -655,7 +754,11 @@ async function badgeFrom(file, style, light) {
 }
 
 async function readExtras() {
-  const r = await run('G', 'P GET', 'P PARTS', 'L', 'W GET');
+  const r = await run('G', 'P GET', 'P PARTS', 'I LIST', 'L', 'W GET');
+  info.items = r.filter(l => l.startsWith('IT ')).map(l => {
+    const [, id, name, bits, added] = l.split(' ');
+    return { id: parseInt(id, 16), name: fromHex(name), bits: bytesOf(bits), added: added === '1' };
+  });
   info.parts = r.filter(l => l.startsWith('PP ')).map(l => {
     const [, layer, index, rarity, has, name] = l.split(' ');
     return { layer: +layer, index: +index, rarity: +rarity, owned: has === '1', name: fromHex(name) };
@@ -665,7 +768,8 @@ async function readExtras() {
   const g = reply(r, 'OK G ');
   info.settings = Object.fromEntries((g ? g.slice(5) : '').split(' ').map(kv => kv.split('=')));
   const p = (reply(r, 'OK P ') || 'OK P 0 ').split(' ');
-  info.pet = { look: p[2], name: fromHex(p[3] || ''), pronouns: fromHex(p[4] || ''), flag: parseInt(p[5] || '0', 16) || 0 };
+  info.pet = { look: p[2], name: fromHex(p[3] || ''), pronouns: fromHex(p[4] || ''), flag: parseInt(p[5] || '0', 16) || 0,
+    held: parseInt(p[6] || '0', 16) || 0 };
   info.badges = r.filter(l => l.startsWith('F ')).map(l => l.slice(2));
   info.timetable = r.filter(l => l.startsWith('WL ')).map(l => l.slice(3).split(',').slice(0, 5));
 }

@@ -57,23 +57,24 @@ default = [int(x) for x in re.search(r"DEFAULT_LOOK = \{\{([\d,\s]+)\}", logic_h
 happy = int(re.search(r"HAPPY_EYES = (\d+)", logic_h).group(1))
 closed = parts(re.search(r"EYES_CLOSED = (\{.*?\}\});", parts_h, re.S).group(1))[0]
 # Example Pets (the RoomiePet page's cards and the README picture), by part name: body, eyes, mouth, hat, accessory,
-# hair, outfit; then pronouns, the pride flag, and what the pin shows ("pronouns", "flag" or None).
+# hair, outfit; then pronouns, the pride flag, what the pin shows ("pronouns", "flag" or None), and what it holds (a
+# name from catalog/items.txt, or None).
 EXAMPLES = [
-    (["Blob", "Lashes", "Cat", "Cat ears", "Choker", "Fluffy bob", "Skirt"], "he/they", "Bi", "flag"),
-    (["Blob", "Eyeliner", "Fangs", "Clips", "Hearts", "Split dye", "Mesh top"], "she/her", "Trans", "pronouns"),
-    (["Blob", "Dots", "Lip ring", "None", "Safety pin", "Liberty", "Patch vest"], "they/them", "Nonbinary", "pronouns"),
-    (["Blob", "Smudged", "Small o", "None", "Wristband", "Emo fringe", "Zip hoodie"], "he/him", "Gay", "flag"),
-    (["Blob", "Eyeliner", "Lipstick", "None", "Cross", "Ringlets", "Cape"], "she/they", "Ace", None),
-    (["Blob", "Dots", "Smirk", "None", "Dog tags", "Slick back", "Leather"], "he/him", "Progress", "flag"),
-    (["Blob", "Lashes", "Lipstick", "Sun hat", "Earrings", "Long", "Sundress"], "she/her", "Lesbian", "pronouns"),
-    (["Bunny", "Dots", "Smile", "Top hat", "Bow tie", "None", "Waistcoat"], "any", "Rainbow", "flag"),
+    (["Blob", "Lashes", "Cat", "Cat ears", "Choker", "Fluffy bob", "Skirt"], "he/they", "Bi", "flag", "Broom"),
+    (["Blob", "Eyeliner", "Fangs", "Clips", "Hearts", "Split dye", "Mesh top"], "she/her", "Trans", "pronouns", "Wand"),
+    (["Blob", "Dots", "Lip ring", "None", "Safety pin", "Liberty", "Patch vest"], "they/them", "Nonbinary", "pronouns", "Game pad"),
+    (["Blob", "Smudged", "Small o", "None", "Wristband", "Emo fringe", "Zip hoodie"], "he/him", "Gay", "flag", None),
+    (["Blob", "Eyeliner", "Lipstick", "None", "Cross", "Ringlets", "Cape"], "she/they", "Ace", None, "Candle"),
+    (["Blob", "Dots", "Smirk", "None", "Dog tags", "Slick back", "Leather"], "he/him", "Progress", "flag", "Wrench"),
+    (["Blob", "Lashes", "Lipstick", "Sun hat", "Earrings", "Long", "Sundress"], "she/her", "Lesbian", "pronouns", "Watering can"),
+    (["Bunny", "Dots", "Smile", "Top hat", "Bow tie", "None", "Waistcoat"], "any", "Rainbow", "flag", "Carrot"),
 ]
 ARRAYS = ["BODIES", "EYES", "MOUTHS", "HATS", "EXTRAS", "HAIRS", "OUTFITS"]
 all_layers = [{"name": n, "parts": array(a)} for n, a in zip(x4_names, ARRAYS)]
 names_of = [[p["name"] for p in layer["parts"]] for layer in all_layers]
 flag_names = [f["name"] for f in flag_list]
 examples = [{"parts": [names_of[i].index(n) for i, n in enumerate(names)], "pronouns": pr,
-             "flag": flag_names.index(flag), "pin": pin} for names, pr, flag, pin in EXAMPLES]
+             "flag": flag_names.index(flag), "pin": pin, "held": held} for names, pr, flag, pin, held in EXAMPLES]
 # The Tools page's designer (the Waveshare board) has rows for the first five, with the parts it always had.
 layers = [{"name": n, "parts": array(a)[:k]} for n, a, k in zip(layer_names, ARRAYS, waveshare_parts)][:5]
 order_names = re.search(r"DRAW_ORDER\[LAYERS\] = \{(.*?)\};", logic_h).group(1).replace(" ", "").split(",")

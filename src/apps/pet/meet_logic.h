@@ -7,8 +7,8 @@
 //   HELLO   (to everyone, 1-4 times a second while Meet is open): id u32 (random, made once per device; not its
 //           radio address), look u32 (pet_logic.h's pack), name length u8 + up to 12 bytes, heard u32 (the Pet
 //           this device hears best: the low 24 bits of its id, then how strongly (dBm, the top 8 bits)); on
-//           RoomiePet then the owner's pronouns: length u8 + up to 12 bytes (pronouns.h), and their pride flag u8
-//           (flags.h)
+//           RoomiePet then the owner's pronouns: length u8 + up to 12 bytes (pronouns.h), their pride flag u8
+//           (flags.h), what the Pet holds u32 (an item id) and its catalog's digest u32 (items_logic.h)
 //   CONNECT (someone pressed B with another device in reach): from u32, to u32
 //   ACT     (the left device starts an act; both play it from when it arrived): from u32, to u32, act u8, actor u8,
 //           seed u32
@@ -39,6 +39,7 @@ struct Hello {
   char name[MAX_NAME + 1];
   char pronouns[MAX_PRONOUNS + 1];  // RoomiePet's HELLO carries them (unidex's has none); zero a Hello before use
   uint8_t flag;                     // and the owner's pride flag byte (flags.h)
+  uint32_t held, items;             // what the Pet holds (an item id) and its catalog's digest (items_logic.h)
 };
 
 inline void put32(uint8_t *p, uint32_t v) {
@@ -46,8 +47,9 @@ inline void put32(uint8_t *p, uint32_t v) {
 }
 inline uint32_t get32(const uint8_t *p) { return p[0] | p[1] << 8 | p[2] << 16 | (uint32_t)p[3] << 24; }
 
-// RoomiePet's HELLO adds the owner's pronouns (length u8 + up to 12 bytes) and pride flag byte, after heard.
-static const size_t HEADER = 5, HELLO_LEN = HEADER + 4 + 4 + 1 + MAX_NAME + 4 + (UNIDEX_X4 ? 1 + MAX_PRONOUNS + 1 : 0);
+// RoomiePet's HELLO adds the owner's pronouns (length u8 + up to 12 bytes), pride flag byte, what the Pet holds (u32)
+// and its catalog of things to hold's digest (u32), after heard.
+static const size_t HEADER = 5, HELLO_LEN = HEADER + 4 + 4 + 1 + MAX_NAME + 4 + (UNIDEX_X4 ? 1 + MAX_PRONOUNS + 1 + 4 + 4 : 0);
 
 inline size_t header(uint8_t *out, Type t) {
   memcpy(out, RADIO_MAGIC, 3), out[3] = VERSION, out[4] = t;
@@ -76,6 +78,8 @@ inline size_t encodeHello(const Hello &h, uint8_t *out) {
     memset(pr + 1, 0, MAX_PRONOUNS);
     memcpy(pr + 1, h.pronouns, k);
     pr[1 + MAX_PRONOUNS] = h.flag;
+    put32(pr + 2 + MAX_PRONOUNS, h.held);
+    put32(pr + 6 + MAX_PRONOUNS, h.items);
   }
   return HELLO_LEN;
 }
@@ -91,7 +95,7 @@ inline bool decodeHello(const uint8_t *p, size_t len, Hello &h) {
   h.name[p[13]] = 0;
   h.heard = get32(p + 14 + MAX_NAME);
   h.pronouns[0] = 0;
-  h.flag = 0;
+  h.flag = 0, h.held = h.items = 0;
   if (UNIDEX_X4) {
     const uint8_t *pr = p + 18 + MAX_NAME;
     if (pr[0] > MAX_PRONOUNS) return false;
@@ -100,6 +104,8 @@ inline bool decodeHello(const uint8_t *p, size_t len, Hello &h) {
     memcpy(h.pronouns, pr + 1, pr[0]);
     h.pronouns[pr[0]] = 0;
     h.flag = pr[1 + MAX_PRONOUNS];
+    h.held = get32(pr + 2 + MAX_PRONOUNS) & 0xFFFFFF;
+    h.items = get32(pr + 6 + MAX_PRONOUNS);
   }
   return h.id != 0;
 }
@@ -155,6 +161,7 @@ struct Nearby {
   char name[MAX_NAME + 1];
   char pronouns[MAX_PRONOUNS + 1];
   uint8_t flag;
+  uint32_t held;
   uint8_t mac[6];
   int8_t readings[8];  // the latest strengths, the newest at [(count - 1) % 8]
   uint8_t count;
@@ -180,12 +187,12 @@ class NearbyList {
     Nearby &p = pets[i];
     const bool wasInReach = !isNew && inReach(i);
     const bool changed = isNew || p.look != h.look || strcmp(p.name, h.name) != 0 || strcmp(p.pronouns, h.pronouns) != 0 ||
-                         p.flag != h.flag;
+                         p.flag != h.flag || p.held != h.held;
     p.id = h.id, p.look = h.look, p.lastHeard = now;
     p.theirs = (int8_t)heardOf(h.heard, me);
     memcpy(p.name, h.name, sizeof p.name);
     memcpy(p.pronouns, h.pronouns, sizeof p.pronouns);
-    p.flag = h.flag;
+    p.flag = h.flag, p.held = h.held;
     memcpy(p.mac, mac, 6);
     if (rssi) {
       p.readings[p.count % 8] = rssi;

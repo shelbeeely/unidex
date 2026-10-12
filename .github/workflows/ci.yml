@@ -33,6 +33,13 @@ jobs:
       - name: Computer tests
         run: tools/run_tests.sh
 
+      # Files made from others: the Pet's parts for the websites, and the things to hold from catalog/items.txt.
+      - name: Generated files are up to date
+        run: |
+          pip install -q pillow
+          python3 tools/pet/export.py --check
+          python3 tools/items/build.py --check
+
       # The X4 web app's household rules: house.wasm is house_logic.h compiled with clang (tools/wasm/build.sh). The
       # committed file and a fresh build both pass the same checks (byte-for-byte equality isn't asked: another
       # clang version may lay it out differently).

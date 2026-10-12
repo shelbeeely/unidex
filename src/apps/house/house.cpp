@@ -19,6 +19,7 @@
 #include "../../core/theme.h"
 #include "../pet/flags.h"
 #include "../pet/pet.h"
+#include "../pet/held.h"
 #include "phone.h"
 #include "../../core/hotspot.h"
 
@@ -275,7 +276,7 @@ static void drawList() {
                tag ? "$" : "", tag ? tag : "");
       if (r.origin == h.me && !tag) strlcpy(right, "you, no $cashtag", sizeof right);
     }
-    drawRow(i - top, i == cursor, left, right, screen == ROOMMATES ? (uint8_t)r.d : 0);
+    drawRow(i - top, i == cursor, left, right, screen == ROOMMATES ? (uint8_t)(r.d & 0xFF) : 0);
   }
   if (screen == CHORES_LIST && !today) drawToast("Set the clock (Settings or Sync)");
   const bool onRecord = cursor < rowCount;
@@ -549,11 +550,12 @@ static void syncStop() {
 static void sayHello() {
   House &h = houseData();
   Hello hi = {h.id,          h.me, clockValid() ? (uint32_t)time(nullptr) : 0, (uint32_t)clockTrustedAt(),
-              petLookBits(), h.clock, ""};
+              petLookBits(), h.clock, "", itemsDigest()};
   strlcpy(hi.name, petName().c_str(), sizeof hi.name);
   if (!hi.name[0]) strlcpy(hi.name, "Pet", sizeof hi.name);
   uint8_t pkt[250];
   linkBroadcast(pkt, encodeHello(hi, pkt));
+  itemsBeat();  // and a thing to hold, while a roommate's catalog differs (held.h)
 }
 
 static Redraw syncTick() {
@@ -581,8 +583,10 @@ static Redraw syncTick() {
   LinkPacket p;
   Hello hi;
   while (linkPoll(p)) {
+    if (itemsHeard(p.data, p.len)) continue;  // a thing to hold, passed on (held.h)
     if (decodeHello(p.data, p.len, hi)) {
       if (hi.id == h.me) continue;
+      itemsNoteDigest(hi.items);
       int k = 0;
       while (k < heardCount && heard[k].id != hi.id) k++;
       if (k == heardCount && heardCount < (int)MAX_MEMBERS) {
@@ -666,7 +670,8 @@ static void drawSync() {
     if (h.id && heard[i].house != h.id) continue;
     const int16_t cx = 25 + shownPets * 50;
     const Record *m = member(h, heard[i].id);
-    petDraw(m ? m->a : petLookBits(), 1, cx - 16, CONTENT_TOP + 48);
+    petDraw(m ? m->a : petLookBits(), 1, cx - 16, CONTENT_TOP + 48, PetMood::Normal, nullptr, 0,
+            m ? m->d >> 8 : petHeld());
     display.setFont(FONT_TINY);
     const String n = fitText(heard[i].name, 48);
     display.setCursor(cx - textWidth(n.c_str()) / 2, CONTENT_TOP + 94);

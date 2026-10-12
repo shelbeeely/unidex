@@ -22,7 +22,8 @@ static const size_t MAX_RECORDS = 120, MAX_MEMBERS = 8, TEXT = 24, NAME = 12;
 enum Kind : uint8_t {
   MEMBER = 1,    // a roommate's Pet: text = Pet name, a = Pet look (pet_logic.h's pack), b and c = its owner's
                  // pronouns (RoomiePet: pronouns.h's pack; 0 = none), d = its owner's pride flag byte
-                 // (RoomiePet: flags.h; 0 = none)
+                 // (RoomiePet: flags.h; 0 = none) in the low 8 bits, and what
+                 // the Pet holds (an item id, items_logic.h) in the 24 above
   CHORE = 2,     // text = chore, a = every how many days, b = due day, c = who did it last (0 = no one), d = that day
   ITEM = 3,      // shopping: text = what, a = 1 once bought
   EXPENSE = 4,   // text = what for, a = who paid, b = pence; shared by everyone who had joined by then (born)
@@ -420,7 +421,8 @@ static const char *const RADIO_MAGIC = UNIDEX_X4 ? ROOMIEPET_MAGIC : UNIDEX_MAGI
 static const uint8_t VERSION = 1;
 enum Type : uint8_t { HELLO = 1, RECORDS = 2 };
 static const size_t HEADER = 9, RECORD_LEN = 2 + 2 + 4 * 8 + 1 + TEXT, PER_PACKET = 3;
-static const size_t HELLO_LEN = HEADER + 4 + 4 + 4 + 4 + 4 + 1 + NAME;
+// RoomiePet's adds its catalog of things to hold's digest (u32, items_logic.h) at the end.
+static const size_t HELLO_LEN = HEADER + 4 + 4 + 4 + 4 + 4 + 1 + NAME + (UNIDEX_X4 ? 4 : 0);
 
 inline void put32(uint8_t *p, uint32_t v) {
   for (int i = 0; i < 4; i++) p[i] = v >> (8 * i);
@@ -442,6 +444,7 @@ inline uint32_t houseOf(const uint8_t *p) { return get32(p + 5); }
 struct Hello {
   uint32_t house, id, time, trusted, look, clock;
   char name[NAME + 1];
+  uint32_t items;  // RoomiePet: the digest of its things to hold (items_logic.h), 0 if it doesn't say
 };
 
 inline size_t encodeHello(const Hello &h, uint8_t *out) {
@@ -455,6 +458,7 @@ inline size_t encodeHello(const Hello &h, uint8_t *out) {
   out[29] = n;
   memset(out + 30, 0, NAME);
   memcpy(out + 30, h.name, n);
+  if (UNIDEX_X4) put32(out + 30 + NAME, h.items);
   return HELLO_LEN;
 }
 
@@ -475,6 +479,7 @@ inline bool decodeHello(const uint8_t *p, size_t len, Hello &h) {
   h.clock = get32(p + 25);
   memcpy(h.name, p + 30, p[29]);
   h.name[p[29]] = 0;
+  h.items = UNIDEX_X4 ? get32(p + 30 + NAME) : 0;
   return h.id != 0;
 }
 

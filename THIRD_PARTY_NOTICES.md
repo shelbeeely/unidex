@@ -26,6 +26,7 @@ This list was compiled from each project's own licence files and package metadat
 | FreeInk SDK (X4 build only: BoardConfig, EInkDisplay, InputManager, BatteryMonitor, SDCardManager, PowerManager; the freeink-sdk submodule) | 1a5448d | MIT (see below) | 2026 FreeInk; portions from the OpenX4 E-Paper Community SDK (CidVonHighwind and contributors) | https://github.com/Free-Ink/freeink-sdk |
 | SdFat (X4 build only, used by the SDK's SDCardManager) | 2.x | MIT | Bill Greiman | https://github.com/greiman/SdFat |
 | Arduino core for ESP32 and ESP-IDF (X4 build only, through the pioarduino platform) | 3.3.7 / 5.5 | LGPL-2.1-or-later and Apache-2.0, as above | Arduino team; Espressif Systems | https://github.com/espressif/arduino-esp32 |
+| Kenney's 1-Bit Pack: pictures of things a Pet can hold (X4 build only: src/apps/pet/items.h, from catalog/kenney-1-bit-pack; the X4 web app also serves the whole sheet as kenney.png) | 1.2 | CC0 1.0 (public domain; credit not required, given gladly) | Kenney (www.kenney.nl) | https://kenney.nl/assets/1-bit-pack |
 
 **Changes to Apache-2.0 material:** the ES8311 register values and sequences from Espressif's `es8311.c` were
 used in a new, minimal standalone driver written for the Wire bus and the legacy ESP-IDF I2S API

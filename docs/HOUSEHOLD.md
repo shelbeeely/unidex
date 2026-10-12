@@ -72,7 +72,7 @@ A Pet's look has seven layers: Body, Eyes, Mouth, Hat, Accessory, **Hair** and *
 and accessories, then the pronoun pin.
 
 - **On the X4:** Pet, B. The rows go Outfit, Hair, Hat, Accessory, Body, Eyes, Mouth (B: next, hold B: previous),
-  then **Pronouns**, **Flag** (your pride flag), **Pin** (B: off, then pronouns, then flag), Name, Random look and
+  then **Holding** (what it holds: [ITEMS.md](ITEMS.md)), **Pronouns**, **Flag** (your pride flag), **Pin** (B: off, then pronouns, then flag), Name, Random look and
   Done.
 - **In the web app:** the **Pet** tab is the Pet designer: a live preview, a row a layer with ◀ and ▶, a strip of
   every piece in the layer you're on (tap one to put it on), Random, the name, your pronouns (a list, or Other... for

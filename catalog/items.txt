@@ -1,0 +1,101 @@
+# RoomiePet's things to hold: one line each, "Name, sprite". Names are up to 12 characters; the order is the order
+# they're offered in. A sprite is either
+#   kenney:<number>   a tile of Kenney's 1-Bit Pack (kenney-1-bit-pack/sheet.png, CC0: numbered from 0, left to right,
+#                     then row by row, 49 to a row; the web app's Items page shows every one with its number), or
+#   <file>.png        a picture in sprites/: 16 x 16, anything not transparent (or not white) is ink.
+# After changing this file: python3 tools/items/build.py (it writes src/apps/pet/items.h and site/x4/items.js).
+# An X4 can also take new things to hold from its web app, without new firmware, and passes them on to the X4s it
+# meets (pet_logic.h's items, docs/ITEMS.md).
+
+# Chores
+Broom, broom.png
+Mop, mop.png
+Spray, spray.png
+Sponge, sponge.png
+Plunger, plunger.png
+Duster, duster.png
+Laundry, laundry.png
+Bin bag, binbag.png
+Watering can, kenney:193
+Bucket, kenney:453
+Toilet, kenney:502
+Cart, kenney:769
+Toolbox, kenney:292
+Wrench, kenney:336
+Shovel, kenney:287
+
+# Food
+Apple, kenney:915
+Pear, kenney:916
+Carrot, kenney:1014
+Pineapple, kenney:1012
+Cheese, kenney:818
+Cake, kenney:485
+Pot, kenney:690
+Cauldron, kenney:691
+Bottle, kenney:488
+
+# Treasure
+Coin, kenney:188
+Coins, kenney:237
+Banknote, kenney:239
+Pouch, kenney:241
+Ring, kenney:337
+Amulet, kenney:386
+Crown, kenney:141
+Big crown, kenney:142
+Trophy, kenney:824
+Key, kenney:571
+Heart, kenney:529
+
+# Adventure
+Sword, kenney:375
+Long sword, kenney:424
+Dagger, kenney:326
+Axe, kenney:383
+Hammer, kenney:380
+Mace, kenney:430
+Spear, kenney:385
+Scythe, kenney:134
+Pickaxe, kenney:288
+Bow, kenney:331
+Arrow, kenney:285
+Shield, kenney:135
+Crest, kenney:184
+Torch, kenney:190
+Wand, kenney:563
+Bomb, kenney:486
+
+# Magic
+Potion, kenney:580
+Flask, kenney:579
+Ink pot, kenney:671
+Oil lamp, kenney:570
+Candle, kenney:738
+Hourglass, kenney:627
+Sparkle, kenney:575
+Bubbles, kenney:574
+Flame, kenney:567
+Campfire, kenney:504
+Skull, kenney:622
+Bone, kenney:620
+Feather, kenney:568
+Sun, kenney:566
+
+# Fun
+Ball, kenney:138
+Bat, kenney:130
+Game pad, kenney:766
+Music, kenney:823
+Radio, kenney:403
+Book, kenney:290
+Disk, kenney:826
+Backpack, kenney:243
+Bell, kenney:145
+Top hat, kenney:143
+Cowboy hat, kenney:144
+Jar, kenney:194
+Pill, kenney:139
+Perfume, kenney:964
+Smiley, kenney:721
+Rocket, kenney:1062

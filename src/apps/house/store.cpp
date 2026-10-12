@@ -83,12 +83,12 @@ void houseUpdateMe() {
   pronouns::pack(petPronouns().c_str(), pb, pc);
   Record *me = myMember();
   if (!me) {
-    add(data, MEMBER, name.c_str(), look, pb, pc, petFlag());
+    add(data, MEMBER, name.c_str(), look, pb, pc, petFlag() | petHeld() << 8);
     houseSave();
-  } else if (strncmp(me->text, name.c_str(), TEXT) != 0 || me->a != look || me->b != pb || me->c != pc || me->d != petFlag() ||
+  } else if (strncmp(me->text, name.c_str(), TEXT) != 0 || me->a != look || me->b != pb || me->c != pc || me->d != (petFlag() | petHeld() << 8) ||
              (me->flags & DELETED)) {
     strlcpy(me->text, name.c_str(), sizeof me->text);
-    me->a = look, me->b = pb, me->c = pc, me->d = petFlag();
+    me->a = look, me->b = pb, me->c = pc, me->d = petFlag() | petHeld() << 8;
     me->flags &= ~DELETED;
     touch(data, *me);
     houseSave();
