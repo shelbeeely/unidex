@@ -42,19 +42,22 @@ bool petUsb(const char *line) {
       usbOut().println("ERR");
       return true;
     }
-    // Parts that don't exist, or haven't been earned yet, fall back to the default.
-    storagePutInt("pet_look", pet::pack(pet::onlyUnlocked(pet::unpack(look), petExp())));
+    // Parts that don't exist, or gifts not found yet, fall back to the default.
+    pet::Owned owned;
+    petOwned(owned.layer);
+    storagePutInt("pet_look", pet::pack(pet::onlyOwned(pet::unpack(look), owned)));
     if (name.length()) storagePutString("pet_name", name.c_str());
     else storageRemoveKey("pet_name");
     petChanged();
     usbOut().println("OK P SET");
   } else if (strcmp(cmd, "PARTS") == 0) {
-    // Every part, for the web app's dress-up: "PP <layer> <index> <EXP needed, 0 free> <hex name>", then
-    // "OK P PARTS <EXP>".
+    // Every part, for the web app's dress-up: "PP <layer> <index> <rarity> <owned> <hex name>" (pet.h).
+    pet::Owned owned;
+    petOwned(owned.layer);
     for (int layer = 0; layer < pet::LAYERS; layer++) {
       const pet::LayerParts lp = pet::partsOf(layer);
       for (int i = 0; i < lp.count; i++) {
-        usbOut().printf("PP %d %d %u ", layer, i, (unsigned)pet::expNeeded(layer, i));
+        usbOut().printf("PP %d %d %u %d ", layer, i, (unsigned)pet::rarityOf(layer, i), (int)pet::owns(owned, layer, i));
         for (const char *c = lp.parts[i].name; *c; c++) usbOut().printf("%02x", (uint8_t)*c);
         usbOut().print('\n');
       }
@@ -66,7 +69,7 @@ bool petUsb(const char *line) {
       for (int l = 0; l < pet::LAYERS; l++) usbOut().printf("%c%d", l ? ',' : ' ', pet::STYLES[i].part[l]);
       usbOut().print('\n');
     }
-    usbOut().printf("OK P PARTS %lu\n", (unsigned long)petExp());
+    usbOut().printf("OK P PARTS %lu %d %d\n", (unsigned long)petExp(), pet::giftsOwned(owned), pet::DROP_COUNT);
   } else {
     usbOut().println("ERR");
   }

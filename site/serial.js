@@ -1,4 +1,4 @@
-// Talks to a unidex over USB with Web Serial (Chrome / Edge on desktop).
+// Talks to a RoomiePet or unidex over USB with Web Serial (Chrome / Edge on desktop).
 // The device's protocol (src/core/usbsync.cpp): "?" -> "unidex 1", T <unix> sets the clock,
 // E <count> <crc32> + lines sends calendar events, L / B / D list and upload badges.
 
@@ -81,7 +81,7 @@ export async function connect(port) {
   }
   if (!hello) {
     await close();
-    throw new Error('No reply. Is unidex installed? Press a button on the device to wake it, then try again.');
+    throw new Error('No reply. Is RoomiePet (or unidex) installed? Press a button on the device to wake it, then try again.');
   }
   return { send, expect, close, port };
 }

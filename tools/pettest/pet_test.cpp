@@ -114,43 +114,76 @@ int main() {
   nameFromPlaces(places, name);
   check(name[0] == 0 && nameDoneAt(places, 0), "an empty name: B finishes straight away");
 
-  // Earned cosmetics.
-  bool unlocksExist = true;
-  for (const Unlock &u : UNLOCKS) unlocksExist &= u.part < partsOf(u.layer).count && u.exp > 0;
-  check(unlocksExist, "every earnable part exists");
-  check(expNeeded(BODY, 3) == 0 && strcmp(BODIES[3].name, "Bunny") == 0 && expNeeded(HAT, 6) == 0 &&
-            strcmp(HATS[6].name, "Cap") == 0 && strcmp(EXTRAS[3].name, "Bow tie") == 0 && expNeeded(EXTRA, 3) == 0,
-        "the bunny lad (Bunny, Cap, Bow tie) is free");
-  check(!unlocked(HAT, 7, 59) && unlocked(HAT, 7, 60), "the wizard hat unlocks at 60 EXP");
+  // Gifts: drops after chores.
+  bool dropsOk = true;
+  for (const Drop &d : DROPS) dropsOk &= d.part < partsOf(d.layer).count && d.rarity != STARTER && dropOf(d.layer, d.part) == &d;
+  check(dropsOk, "every gift is a real part, listed once, with a rarity");
+  const Owned none = {};
+  check(owns(none, BODY, 3) && strcmp(BODIES[3].name, "Bunny") == 0 && owns(none, HAT, 6) &&
+            strcmp(HATS[6].name, "Cap") == 0 && strcmp(EXTRAS[3].name, "Bow tie") == 0 && owns(none, EXTRA, 3),
+        "the bunny lad (Bunny, Cap, Bow tie) is a starter");
+  check(!owns(none, HAT, 7) && giftsOwned(none) == 0, "a new Pet has no gifts");
   Look s0 = DEFAULT_LOOK;
   s0.part[HAT] = 6;  // Cap
-  stepUnlocked(s0, HAT, 1, 0);
+  stepOwned(s0, HAT, 1, none);
   check(s0.part[HAT] == 9 && strcmp(HATS[9].name, "Cat ears") == 0,
-        "stepping on from the Cap with no EXP skips the locked hats, to the cat ears");
+        "stepping on from the Cap with no gifts skips them, to the cat ears");
+  Owned wiz = {};
+  give(wiz, *dropOf(HAT, 7));
   s0.part[HAT] = 6;
-  stepUnlocked(s0, HAT, 1, 60);
-  check(s0.part[HAT] == 7, "with 60 EXP the wizard hat comes next");
+  stepOwned(s0, HAT, 1, wiz);
+  check(s0.part[HAT] == 7 && giftsOwned(wiz) == 1, "given the wizard hat, it comes next");
   Look worn = DEFAULT_LOOK;
   worn.part[HAT] = 8, worn.part[EXTRA] = 7, worn.part[BODY] = 3;
-  const Look kept = onlyUnlocked(worn, 0);
+  const Look kept = onlyOwned(worn, none);
   check(kept.part[HAT] == DEFAULT_LOOK.part[HAT] && kept.part[EXTRA] == DEFAULT_LOOK.part[EXTRA] && kept.part[BODY] == 3,
-        "a look with parts not earned keeps only what is");
-  check(newlyUnlocked(20, 35) && strcmp(newlyUnlocked(20, 35)->what, "Apron") == 0 && !newlyUnlocked(35, 39),
-        "crossing 30 EXP unlocks the apron, once");
-  check(nextUnlock(0)->exp == 30 && nextUnlock(250) == nullptr, "the next thing to earn");
+        "a look with gifts not found keeps only what's owned");
+
+  ChoreLuck plain = {false, false, false, false, 0, 0}, good = {true, true, true, true, 9, 0};
+  check(dropChance(plain) == 20 && dropChance(good) == 80, "a 20% chance, up to 80% for a chore done well");
+  ChoreLuck dry = plain;
+  dry.dry = PITY - 1;
+  check(dropChance(dry) == 100 && rollDrop(dry, none, 99, 50, 0), "the 5th chore without a gift always brings one");
+  check(!rollDrop(plain, none, 20, 0, 0) && rollDrop(plain, none, 19, 99, 0), "the chance is the first roll");
+  check(rollRarity(plain, 0) == LEGENDARY && rollRarity(plain, 2) == LEGENDARY && rollRarity(plain, 3) == RARE &&
+            rollRarity(plain, 24) == RARE && rollRarity(plain, 25) == UNCOMMON,
+        "3% legendary, 22% rare, the rest uncommon");
+  check(rollRarity(good, 8) == LEGENDARY && rollRarity(good, 43) == RARE && rollRarity(good, 44) == UNCOMMON, "helping out and streaks raise the odds");
+  // Roll many: never a duplicate, and in the end everything, then nothing.
+  Owned all = {};
+  int rolls = 0, legendaries = 0;
+  uint32_t lcg = 12345;
+  auto rnd = [&] { return lcg = lcg * 1103515245 + 12345, lcg >> 8; };
+  bool noDupes = true;
+  for (; rolls < 2000 && giftsOwned(all) < DROP_COUNT; rolls++) {
+    ChoreLuck c = plain;
+    c.dry = PITY - 1;  // always a gift
+    if (const Drop *d = rollDrop(c, all, rnd(), rnd(), rnd())) {
+      noDupes &= !owns(all, d->layer, d->part);
+      legendaries += d->rarity == LEGENDARY;
+      give(all, *d);
+    }
+  }
+  check(noDupes && giftsOwned(all) == DROP_COUNT && rolls == DROP_COUNT, "a sure gift each time: no duplicates, all found");
+  check(rollDrop(dry, all, 0, 0, 0) == nullptr, "nothing drops once a Pet has everything");
+  Owned onlyLegendaryLeft = all;
+  onlyLegendaryLeft.layer[HAT] &= ~(1 << 13);
+  const Drop *last = rollDrop(dry, onlyLegendaryLeft, 0, 99, 0);
+  check(last && last->layer == HAT && last->part == 13, "an uncommon roll with only a legendary left gives that");
+
   // Styles and the new layers.
   bool stylesOk = true;
   for (const Style &st : STYLES)
     for (int i = 0; i < LAYERS; i++) stylesOk &= st.part[i] < partsOf(i).count;
   check(stylesOk, "every style's parts exist");
-  const Look femboy = applyStyle(DEFAULT_LOOK, STYLES[0], 0);
+  const Look femboy = applyStyle(DEFAULT_LOOK, STYLES[0], none);
   check(strcmp(HAIRS[femboy.part[HAIR]].name, "Fluffy bob") == 0 && strcmp(OUTFITS[femboy.part[OUTFIT]].name, "Skirt") == 0 &&
             strcmp(HATS[femboy.part[HAT]].name, "Cat ears") == 0,
         "the femboy style: fluffy bob, skirt, cat ears (all free)");
-  const Look goth = applyStyle(DEFAULT_LOOK, STYLES[4], 0);
+  const Look goth = applyStyle(DEFAULT_LOOK, STYLES[4], none);
   check(goth.part[OUTFIT] == DEFAULT_LOOK.part[OUTFIT] && strcmp(HAIRS[goth.part[HAIR]].name, "Long") == 0,
-        "the goth style without EXP: long hair now, the corset once it's earned");
-  check(applyStyle(DEFAULT_LOOK, STYLES[4], 1000).part[OUTFIT] == 6, "and with the EXP, the corset");
+        "the goth style without gifts: long hair now, the corset once it drops");
+  check(applyStyle(DEFAULT_LOOK, STYLES[4], all).part[OUTFIT] == 6, "and with every gift, the corset");
   Look old = DEFAULT_LOOK;
   old.part[HAIR] = 5, old.part[OUTFIT] = 9;
   check(unpack(pack(old) & 0xFFFFF).part[HAIR] == 0 && unpack(pack(old)).part[OUTFIT] == 9,

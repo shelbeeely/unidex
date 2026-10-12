@@ -259,7 +259,7 @@ bool phoneStart() {
   if (netClaimed()) return false;  // a note is sending over the normal WiFi
   uint8_t mac[6];
   esp_read_mac(mac, ESP_MAC_WIFI_SOFTAP);
-  snprintf(ssid, sizeof ssid, "unidex-%02X%02X", mac[4], mac[5]);
+  snprintf(ssid, sizeof ssid, "%s-%02X%02X", DEVICE_SSID_PREFIX, mac[4], mac[5]);
   // No look-alike characters (l/1, O/0), so it can be typed from the screen if the camera can't scan.
   static const char ALPHABET[] = "abcdefghjkmnpqrstuvwxyz23456789";
   for (size_t i = 0; i < sizeof password - 2; i++) password[i] = ALPHABET[esp_random() % (sizeof ALPHABET - 1)];

@@ -50,7 +50,7 @@ bool houseUsb(const char *line) {
     for (int i = 0; i < h.count; i++)
       if (sameKey(h.r[i], r)) before = h.r[i], old = &before;
     const Merge m = merge(h, r);
-    if (m == ADDED || m == UPDATED) houseCreditChore(old, r);  // a chore done in the web app earns EXP too
+    if (m == ADDED || m == UPDATED) houseCreditChore(old, r);  // a chore done in the web app can bring a gift too
     out.printf("OK H PUT %d\n", (int)m);
   } else if (strcmp(cmd, "SAVE") == 0) {
     houseSave();

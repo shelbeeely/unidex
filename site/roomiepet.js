@@ -1,11 +1,11 @@
 // The RoomiePet page: the styles, a try-on and the whole wardrobe, drawn from the same parts as the X4
 // (x4/pet-art.js, generated from the firmware by tools/pet/export.py).
-import { LAYERS, DRAW_ORDER, STYLES, UNLOCKS } from './x4/pet-art.js';
+import { LAYERS, DRAW_ORDER, STYLES, DROPS, RARITIES } from './x4/pet-art.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
 const DEFAULT = [0, 0, 0, 0, 1, 0, 0];
-const need = (layer, part) => (UNLOCKS.find(u => u.layer === layer && u.part === part) || {}).exp || 0;
+const rarity = (layer, part) => (DROPS.find(d => d.layer === layer && d.part === part) || {}).rarity || 0;  // 0: a starter
 const withStyle = (look, style) => look.map((p, i) => (style.parts[i] >= 0 ? style.parts[i] : p));
 
 function draw(canvas, look, only) {
@@ -30,8 +30,8 @@ function canvas(look) {
   return c;
 }
 
-// What a style puts on, in words: its named parts, earned ones marked.
-const describe = st => st.parts.map((p, i) => (p <= 0 ? null : LAYERS[i].parts[p].name + (need(i, p) ? '*' : '')))
+// What a style puts on, in words: its named parts, gifts marked.
+const describe = st => st.parts.map((p, i) => (p <= 0 ? null : LAYERS[i].parts[p].name + (rarity(i, p) ? '*' : '')))
   .filter(Boolean).join(', ');
 
 // ---- Styles
@@ -58,7 +58,7 @@ const pickers = LAYERS.map((layer, i) => {
   const label = document.createElement('label');
   label.textContent = layer.name;
   const sel = document.createElement('select');
-  layer.parts.forEach((p, k) => sel.add(new Option(p.name + (need(i, k) ? ` (${need(i, k)} EXP)` : ''), k)));
+  layer.parts.forEach((p, k) => sel.add(new Option(p.name + (rarity(i, k) ? ` (${RARITIES[rarity(i, k)]} gift)` : ''), k)));
   sel.onchange = () => { look[i] = +sel.value; update(); };
   label.appendChild(sel);
   $('pickers').appendChild(label);
@@ -86,7 +86,7 @@ for (const [layer, title] of ORDER) {
     const cell = document.createElement('div');
     cell.className = 'pet';
     cell.appendChild(canvas(l));
-    cell.insertAdjacentHTML('beforeend', `<b>${esc(p.name)}</b>${need(layer, k) ? `<span class="exp">${need(layer, k)} EXP</span>` : ''}`);
+    cell.insertAdjacentHTML('beforeend', `<b>${esc(p.name)}</b>${rarity(layer, k) ? `<span class="gift r${rarity(layer, k)}">${RARITIES[rarity(layer, k)]}</span>` : ''}`);
     grid.appendChild(cell);
   });
   $('wardrobe').appendChild(grid);

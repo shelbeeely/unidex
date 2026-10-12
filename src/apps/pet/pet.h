@@ -5,10 +5,14 @@
 uint32_t petLookBits();  // the saved look, as pet_logic.h packs it
 String petName();        // "" if none is set
 uint32_t petId();        // this device's Pet: a random number made once (meet.cpp); its id in the household too
-// EXP from chores (RoomiePet): unlocks dress-up parts (pet_logic.h's UNLOCKS). petAddExp passes on "Unlocked: ..."
-// as the Pet's news when it crosses one.
+// Chores (RoomiePet): each gives the Pet EXP, which only sets its level, and a chance of a gift (pet_logic.h's
+// DROPS), like loot: better for a chore done on time, covering a roommate's turn, rescuing a late one, the first one
+// today and a streak of days; a dry spell ends with a sure one. petChoreDone returns "Gift! Halo (rare)" and passes
+// it on as the Pet's news, or returns nullptr when nothing dropped.
 uint32_t petExp();
-void petAddExp(uint32_t points);
+const char *petChoreDone(bool onTime, bool helped, bool rescued);
+// Which gifts this Pet has found (pet_logic.h's Owned, one bit per part a layer), saved in NVS.
+void petOwned(uint16_t out[7]);
 void petChanged();       // the website saved a new look or name: the Pet screen redraws
 enum class PetMood : uint8_t { Normal, Happy, Blink };
 // A Pet's look, scale x 32 px, its top left at x0, y0 (parts off the screen are skipped); Happy and Blink swap in
@@ -26,6 +30,8 @@ void petDrawBubble(const char *text, int16_t cx, int16_t bottom);
 // with "P "; returns false if it isn't one of them.
 //   P GET                        -> "OK P <look, hex> <name, hex>"
 //   P SET <look hex> <name hex>  -> "OK P SET" or "ERR"  (name: up to 12 printable characters; empty = no name;
-//                                   parts not earned yet are left at the default)
-//   P PARTS                      -> "PP <layer> <index> <EXP needed> <hex name>" per part, "OK P PARTS <EXP>"
+//                                   gifts not found yet are left at the default)
+//   P PARTS                      -> "PP <layer> <index> <rarity> <owned 0/1> <hex name>" per part (rarity 0 starter,
+//                                   1 uncommon, 2 rare, 3 legendary), "PS ..." per style,
+//                                   "OK P PARTS <EXP> <gifts found> <gifts in all>"
 bool petUsb(const char *line);

@@ -167,11 +167,13 @@ static void updateLine() {
 
 void houseStatus(char *out, size_t len) { strlcpy(out, line[0] ? line : "Your household", len); }
 
-void houseCreditChore(const Record *before, const Record &after) {
-  if (after.kind != CHORE || (after.flags & DELETED) || after.c != data.me || after.editor != data.me) return;
-  if (before && before->c == after.c && before->d == after.d) return;  // not newly done
+const char *houseCreditChore(const Record *before, const Record &after) {
+  if (after.kind != CHORE || (after.flags & DELETED) || after.c != data.me || after.editor != data.me) return nullptr;
+  if (before && before->c == after.c && before->d == after.d) return nullptr;  // not newly done
   const bool onTime = before && after.d <= before->b;
-  petAddExp(onTime ? 15 : 10);
+  const bool helped = before && turnOf(data, *before) != data.me;  // it was a roommate's turn
+  const bool rescued = before && before->b < after.d;              // it was late
+  return petChoreDone(onTime, helped, rescued);
 }
 
 // ---- News, kept in NVS until the Pet has passed it on.

@@ -11,8 +11,9 @@ const PIP = 100, BISCUIT = 200;
 const house = { id: 77, me: PIP, clock: 2, nextSeq: 1, records: new Map() };
 const settings = { sleep: 10, invert: 0, time: 0 };
 let pet = { look: '0010000', name: 'Pip' }, badges = ['hello.bmp'], timetable = ['Mon,09:00,10:00,Maths,B12'];
-let upload = null, body = null, exp = 0;
-// The Pet's parts and what they cost, read from the firmware's own files.
+let upload = null, body = null, exp = 0, dry = 0;
+const owned = new Set();  // gifts found, 'layer:part'
+// The Pet's parts and which are gifts, read from the firmware's own files.
 const partsSrc = readFileSync('src/apps/pet/parts.h', 'utf8'), logicSrc = readFileSync('src/apps/pet/pet_logic.h', 'utf8');
 const PARTS = ['BODIES', 'EYES', 'MOUTHS', 'HATS', 'EXTRAS', 'HAIRS', 'OUTFITS'].map(sec => {
   const start = partsSrc.indexOf(`PetPart ${sec}[]`), end = partsSrc.indexOf('\n};', start);
@@ -20,8 +21,18 @@ const PARTS = ['BODIES', 'EYES', 'MOUTHS', 'HATS', 'EXTRAS', 'HAIRS', 'OUTFITS']
 });
 const LAYER = { BODY: 0, EYES_LAYER: 1, MOUTH: 2, HAT: 3, EXTRA: 4, HAIR: 5, OUTFIT: 6 };
 const STYLES = [...logicSrc.matchAll(/\{"([^"]+)", \{([-\d, ]+)\}\}/g)].map(m => ({ name: m[1], parts: m[2].replace(/ /g, '') }));
-const UNLOCKS = [...logicSrc.matchAll(/\{(BODY|EYES_LAYER|MOUTH|HAT|EXTRA|HAIR|OUTFIT), (\d+), (\d+), "/g)].map(m => ({ layer: LAYER[m[1]], part: +m[2], exp: +m[3] }));
-const need = (layer, part) => (UNLOCKS.find(u => u.layer === layer && u.part === part) || { exp: 0 }).exp;
+const RARITY = { UNCOMMON: 1, RARE: 2, LEGENDARY: 3 };
+const DROPS = [...logicSrc.matchAll(/\{(BODY|EYES_LAYER|MOUTH|HAT|EXTRA|HAIR|OUTFIT), (\d+), (UNCOMMON|RARE|LEGENDARY), "/g)].map(m => ({ layer: LAYER[m[1]], part: +m[2], rarity: RARITY[m[3]] }));
+const rarity = (layer, part) => (DROPS.find(d => d.layer === layer && d.part === part) || { rarity: 0 }).rarity;
+const owns = (layer, part) => !rarity(layer, part) || owned.has(layer + ':' + part);
+// A chore's gift, roughly as the X4 rolls it (pet_logic.h's rollDrop): a 50% chance here, sure on the 5th try.
+function choreGift() {
+  const left = DROPS.filter(d => !owned.has(d.layer + ':' + d.part));
+  if (!left.length || (Math.random() >= 0.5 && ++dry < 5)) return;
+  const d = left[Math.floor(Math.random() * left.length)];
+  owned.add(d.layer + ':' + d.part);
+  dry = 0;
+}
 
 function memberHex(seq, origin, ver, text) {
   const b = Buffer.alloc(61);
@@ -51,11 +62,11 @@ function handle(line, out) {
     house.clock = Math.max(house.clock, v) + 1;
     const b = Buffer.from(hex, 'hex');
     if (b.readUInt32LE(4) === house.me) house.nextSeq = Math.max(house.nextSeq, b.readUInt16LE(2));
-    // A chore this Pet did: EXP, as the X4 does (house/store.cpp).
+    // A chore this Pet did: EXP for its level and maybe a gift, as the X4 does (house/store.cpp).
     if (b[0] === 2 && b.readUInt32LE(28) === house.me && b.readUInt32LE(12) === house.me) {
       const before = old && Buffer.from(old, 'hex');
       if (!before || before.readUInt32LE(28) !== house.me || before.readUInt32LE(32) !== b.readUInt32LE(32))
-        exp += before && b.readUInt32LE(32) <= before.readUInt32LE(24) ? 15 : 10;
+        exp += before && b.readUInt32LE(32) <= before.readUInt32LE(24) ? 15 : 10, choreGift();
     }
     if (!old) { house.records.set(k, hex); return out.push('OK H PUT 1'); }
     const [ov, oe] = verOf(old);
@@ -69,9 +80,9 @@ function handle(line, out) {
   if (line.startsWith('G SET ')) { const [, , k, v] = line.split(' '); settings[k] = +v; return out.push('OK G SET'); }
   if (line === 'P GET') return out.push(`OK P ${pet.look} ${Buffer.from(pet.name).toString('hex')}`);
   if (line === 'P PARTS') {
-    PARTS.forEach((names, layer) => names.forEach((n, i) => out.push(`PP ${layer} ${i} ${need(layer, i)} ${Buffer.from(n).toString('hex')}`)));
+    PARTS.forEach((names, layer) => names.forEach((n, i) => out.push(`PP ${layer} ${i} ${rarity(layer, i)} ${+owns(layer, i)} ${Buffer.from(n).toString('hex')}`)));
     STYLES.forEach((st, i) => out.push(`PS ${i} ${Buffer.from(st.name).toString('hex')} ${st.parts}`));
-    return out.push('OK P PARTS ' + exp);
+    return out.push(`OK P PARTS ${exp} ${owned.size} ${DROPS.length}`);
   }
   if (line.startsWith('P SET ')) { const [, , look, name] = line.split(' '); pet = { look, name: Buffer.from(name || '', 'hex').toString() }; return out.push('OK P SET'); }
   if (line === 'L') { badges.forEach(b => out.push('F ' + b)); return out.push('OK L'); }

@@ -21,7 +21,7 @@ void hotspotStop();
 bool hotspotOn();
 void hotspotPoll();      // call often while on: answers the phone; stops after the idle time
 void hotspotActivity();  // a button press counts as use
-const char *hotspotSsid();      // "unidex-1A2B"
+const char *hotspotSsid();      // "roomiepet-1A2B" (unidex-1A2B off the X4)
 const char *hotspotPassword();
 const char *hotspotJoinCode();  // what the QR code holds: WIFI:T:WPA;S:<ssid>;P:<password>;;
 uint32_t hotspotServed();       // pages served since it started

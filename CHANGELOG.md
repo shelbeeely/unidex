@@ -2,7 +2,7 @@
 
 What changed in each release, in short. The full notes are on the
 [releases page](https://github.com/Forrest404/unidex/releases). Update from
-https://forrest404.github.io/unidex/ (Update keeps your settings and files).
+https://forrest404.github.io/unidex/install.html (Update keeps your settings and files).
 
 ## v1.6.1 (9 October 2026)
 

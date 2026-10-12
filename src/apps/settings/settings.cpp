@@ -14,6 +14,7 @@
 #include <esp_mac.h>
 #include "../../core/usbsync.h"
 #include <unidex_version.h>
+#include "../../core/board.h"
 
 static const char *VERSION = UNIDEX_VERSION;  // from git, tools/version.py
 static const int SLEEP_CHOICES[] = {10, 20, 30, 60};
@@ -105,13 +106,13 @@ static void drawDateTime() {
   drawHints("next", field == SAVE ? "save" : "+1", field == SAVE ? "" : "-1");
 }
 
-// "unidex-1A2B", so a device can be told apart (when asking for help): the same name as its own WiFi in Notes'
+// "roomiepet-1A2B" ("unidex-..." off the X4), so a device can be told apart (when asking for help): the same name as its own WiFi in Notes'
 // Open on phone (src/apps/notes/phone.cpp). The Pet's radio uses a new random address every time instead.
 static const char *deviceId() {
   static char id[16];
   uint8_t mac[6];
   esp_read_mac(mac, ESP_MAC_WIFI_SOFTAP);
-  snprintf(id, sizeof id, "unidex-%02X%02X", mac[4], mac[5]);
+  snprintf(id, sizeof id, "%s-%02X%02X", DEVICE_SSID_PREFIX, mac[4], mac[5]);
   return id;
 }
 

@@ -339,7 +339,7 @@ static void drawPay() {
   snprintf(title, sizeof title, "Pay %s", payTo == h.me ? "you" : nameOf(h, payTo));
   drawHeader(title);
   if (!tag && !req) {
-    drawEmpty("No $cashtag yet", payTo == h.me ? "Set yours on Roommates" : "They set it on their unidex,",
+    drawEmpty("No $cashtag yet", payTo == h.me ? "Set yours on Roommates" : UNIDEX_X4 ? "They set it on their X4," : "They set it on their unidex,",
               payTo == h.me ? "(B on yourself)." : "then Sync.");
     drawHints("", payFrom ? "settled" : "", "");
     return;
@@ -652,7 +652,7 @@ static void drawSync() {
     drawHints("", "join", "");
     return;
   }
-  drawCenteredLine(h.id ? "Hold near a roommate's unidex" : "Hold near a roommate's unidex", CONTENT_TOP + 18);
+  drawCenteredLine(UNIDEX_X4 ? "Hold near a roommate's X4" : "Hold near a roommate's unidex", CONTENT_TOP + 18);
   drawCenteredLine(h.id ? "to swap the household" : "to join their household", CONTENT_TOP + 34);
   // The Pets heard so far, side by side (in this household, or not yet in one).
   int shownPets = 0;
@@ -872,13 +872,12 @@ static Redraw listButton(Event e) {
       return Redraw::Partial;
     }
     const Record before = *r;
-    const uint32_t expBefore = petExp();
     choreDone(h, *r, today);
-    houseCreditChore(&before, *r);
+    const char *gift = houseCreditChore(&before, *r);  // maybe a gift for the Pet
     houseSave();
     char text[48];
-    snprintf(text, sizeof text, "Done! +%lu EXP for %s", (unsigned long)(petExp() - expBefore),
-             petName().length() ? petName().c_str() : "your Pet");
+    if (gift) strlcpy(text, gift, sizeof text);
+    else snprintf(text, sizeof text, "Done! Well done, %s", petName().length() ? petName().c_str() : "you");
     launcherToast(text);
     return Redraw::Partial;
   }

@@ -1,4 +1,4 @@
-// RoomiePet manager: the web app for a unidex Xteink X4. The same files run from the website (talking to the X4 over
+// RoomiePet manager: the web app for a RoomiePet (an Xteink X4). The same files run from the website (talking to the X4 over
 // USB with Web Serial) and from the X4's own hotspot (House > Manage on phone, talking to its /api). Both send the
 // X4's ordinary text commands (src/core/usbsync.cpp, src/apps/house/usb.h); only the transport differs.
 //
@@ -200,7 +200,7 @@ function render() {
 
 function noHouse() {
   return `<h2>No household yet</h2><p class="note">Start one here, or join a roommate's: on the X4, House, hold B
-    to join, held near their unidex.</p><button class="b p" data-act="start">Start a household</button>`;
+    to join, held near their X4.</p><button class="b p" data-act="start">Start a household</button>`;
 }
 
 const VIEWS = {
@@ -346,11 +346,12 @@ const VIEWS = {
 };
 
 // ---- Dress-up: one choice per layer, a preview drawn from the same art as the X4 (pet-art.js, generated from the
-// firmware's parts), and whole styles in one tap. Parts not earned yet (EXP from chores) are shown locked.
+// firmware's parts), and whole styles in one tap. Gifts not found yet (they drop after chores) are shown locked.
 const LAYERS = ART.map(l => l.name);
 const lookParts = look => LAYERS.map((_, i) => (parseInt(look || '0', 16) >>> (4 * i)) & 15);
 const lookHex = parts => (parts.reduce((v, p, i) => v + (p & 15) * 16 ** i, 0)).toString(16).padStart(7, '0');
-const earned = (layer, index) => { const p = info.parts.find(x => x.layer === layer && x.index === index); return !p || p.exp <= info.exp; };
+const RARITY = ['starter', 'uncommon', 'rare', 'legendary'];
+const owned = (layer, index) => { const p = info.parts.find(x => x.layer === layer && x.index === index); return !p || p.owned; };
 
 function drawPet(canvas, parts) {
   const ctx = canvas.getContext('2d'), s = canvas.width / 32;
@@ -366,19 +367,18 @@ function drawPet(canvas, parts) {
   }
 }
 
-// A style on top of `parts`: its pieces not earned yet stay as they are (as on the X4).
-const withStyle = (parts, style) => parts.map((p, i) => (style.parts[i] >= 0 && earned(i, style.parts[i]) ? style.parts[i] : p));
+// A style on top of `parts`: its gifts not found yet stay as they are (as on the X4).
+const withStyle = (parts, style) => parts.map((p, i) => (style.parts[i] >= 0 && owned(i, style.parts[i]) ? style.parts[i] : p));
 
 function dressUp() {
-  const exp = info.exp, parts = lookParts(info.pet.look), level = 1 + Math.floor(exp / 50);
-  const next = info.parts.filter(p => p.exp > exp).sort((a, b) => a.exp - b.exp)[0];
-  return `<div class="card"><div class="row"><div class="title">Dress up</div><span class="sub">Level ${level} · ${exp} EXP</span></div>
-    <p class="note">Chores earn EXP: 10 each, 15 on time.${next ? ` Next: ${esc(next.name)} at ${next.exp} EXP.` : ' Everything earned!'}</p>
+  const parts = lookParts(info.pet.look), level = 1 + Math.floor(info.exp / 50);
+  return `<div class="card"><div class="row"><div class="title">Dress up</div><span class="sub">Level ${level} · ${info.gifts} of ${info.giftsAll} gifts found</span></div>
+    <p class="note">${info.gifts < info.giftsAll ? 'Gifts drop after chores, like loot: more often for a chore done on time, on a roommate\'s turn or when it was late, and on a streak of days.' : 'Every gift found!'}</p>
     <div class="row" style="align-items:flex-start"><canvas id="petPreview" class="prev" width="192" height="192" style="width:160px;height:160px"></canvas>
     <div class="grow"><div class="sub" style="margin-bottom:6px">Styles</div>${info.styles.map((st, i) =>
       `<button class="b" data-act="style" data-i="${i}" style="margin:0 6px 6px 0">${esc(st.name)}</button>`).join('')}</div></div>
     <form class="add" data-form="look">${LAYERS.map((name, layer) => `<label>${name}<select name="l${layer}">${info.parts
-      .filter(p => p.layer === layer).map(p => `<option value="${p.index}"${p.index === parts[layer] ? ' selected' : ''}${p.exp > exp ? ' disabled' : ''}>${esc(p.name)}${p.exp > exp ? ' (' + p.exp + ' EXP)' : ''}</option>`).join('')}</select></label>`).join('')}
+      .filter(p => p.layer === layer).map(p => `<option value="${p.index}"${p.index === parts[layer] ? ' selected' : ''}${p.owned ? '' : ' disabled'}>${esc(p.name)}${p.rarity ? ' (' + RARITY[p.rarity] + (p.owned ? '' : ', not found yet') + ')' : ''}</option>`).join('')}</select></label>`).join('')}
       <button class="b p">Wear it</button></form></div>`;
 }
 
@@ -445,11 +445,12 @@ const ACTIONS = {
     ok(await run('H LEAVE'), 'OK H LEAVE'); await readHouse(); render();
   },
   done: async d => {
-    const before = info.exp;
+    const had = new Set(info.parts.filter(p => p.owned).map(p => p.layer + ':' + p.index));
     await change(() => wasm.chore_done(+d.o, +d.s, today().day));
     await readExtras();
     render();
-    toast(info.exp > before ? `Done! +${info.exp - before} EXP for your Pet` : 'Done!');
+    const gift = info.parts.find(p => p.owned && !had.has(p.layer + ':' + p.index));
+    toast(gift ? `Gift! ${gift.name} (${RARITY[gift.rarity]}): your Pet found it. Dress it up` : 'Done!', gift ? 4000 : 2600);
   },
   toggle: d => change(() => wasm.toggle_item(+d.o, +d.s)),
   remove: d => confirm('Remove it for everyone (at the next Sync)?') && change(() => wasm.remove_record(+d.o, +d.s), 'Removed'),
@@ -486,8 +487,8 @@ const ACTIONS = {
     const f = document.querySelector('form[data-form=look]');
     withStyle(formParts(f), info.styles[+d.i]).forEach((p, i) => (f['l' + i].value = p));
     refreshPreview();
-    const missing = info.styles[+d.i].parts.filter((p, i) => p >= 0 && !earned(i, p)).length;
-    toast(missing ? `${info.styles[+d.i].name}: ${missing} piece${missing > 1 ? 's' : ''} still to earn` : `${info.styles[+d.i].name}: press Wear it`);
+    const missing = info.styles[+d.i].parts.filter((p, i) => p >= 0 && !owned(i, p)).length;
+    toast(missing ? `${info.styles[+d.i].name}: ${missing} gift${missing > 1 ? 's' : ''} not found yet` : `${info.styles[+d.i].name}: press Wear it`);
   },
   setTime: async () => { ok(await run('T ' + Math.floor(Date.now() / 1000)), 'OK T'); await readExtras(); render(); toast('Clock set'); },
 };
@@ -573,10 +574,10 @@ async function badgeFrom(file, style, light) {
 async function readExtras() {
   const r = await run('G', 'P GET', 'P PARTS', 'L', 'W GET');
   info.parts = r.filter(l => l.startsWith('PP ')).map(l => {
-    const [, layer, index, exp, name] = l.split(' ');
-    return { layer: +layer, index: +index, exp: +exp, name: fromHex(name) };
+    const [, layer, index, rarity, has, name] = l.split(' ');
+    return { layer: +layer, index: +index, rarity: +rarity, owned: has === '1', name: fromHex(name) };
   });
-  info.exp = +((reply(r, 'OK P PARTS ') || '').split(' ')[3] || 0);
+  [info.exp, info.gifts, info.giftsAll] = (reply(r, 'OK P PARTS ') || '').split(' ').slice(3).map(Number).concat([0, 0, 0]);
   info.styles = r.filter(l => l.startsWith('PS ')).map(l => {
     const [, , name, parts] = l.split(' ');
     return { name: fromHex(name), parts: parts.split(',').map(Number) };

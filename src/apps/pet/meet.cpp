@@ -12,6 +12,7 @@
 #include "../../core/link.h"
 #include "../../core/power.h"
 #include "../../core/storage.h"
+#include "../../core/board.h"
 #include "../../core/theme.h"
 
 // Searching: your Pet waits on its own screen. With another device in reach (up to about 30 cm), B connects the
@@ -850,7 +851,7 @@ void meetDraw() {
     drawHeader("Meet", reach >= 0 ? "press B" : near >= 0 ? "come closer" : "looking");
     if (near < 0) {  // nobody yet: say how this works
       display.setFont(FONT_TINY);
-      drawCentered("Open Meet on another unidex", CONTENT_TOP + 9);
+      drawCentered(UNIDEX_X4 ? "Open Meet on another X4" : "Open Meet on another unidex", CONTENT_TOP + 9);
     }
     if (near >= 0) {  // how close the nearest one is: 5 dots, all filled when it's in reach
       const int span = 60 + meet::NearbyList::REACH_DBM;  // -60 dBm: none filled; REACH_DBM: all five

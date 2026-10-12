@@ -49,14 +49,47 @@ uint32_t petLookBits() { return storageGetInt("pet_look", pet::pack(pet::DEFAULT
 
 uint32_t petExp() { return storageGetInt("pet_exp", 0); }
 
-void petAddExp(uint32_t points) {
-  const uint32_t before = petExp(), after = before + points;
-  storagePutInt("pet_exp", after);
-  if (const pet::Unlock *u = pet::newlyUnlocked(before, after)) {
-    char news[64];
-    snprintf(news, sizeof news, "Unlocked: %s! Dress me up", u->what);
-    houseAddNews(news);
+static pet::Owned owned() {
+  pet::Owned o = {};
+  storageGetBytes("pet_owned", &o, sizeof o);
+  return o;
+}
+
+void petOwned(uint16_t out[7]) {
+  const pet::Owned o = owned();
+  memcpy(out, o.layer, sizeof o.layer);
+}
+
+static uint32_t randomNumber() { return devSeed() ? (uint32_t)rand() : esp_random(); }  // test build: repeatable
+
+const char *petChoreDone(bool onTime, bool helped, bool rescued) {
+  storagePutInt("pet_exp", petExp() + (onTime ? 15 : 10));  // EXP: levels only
+  // The days in a row with a chore done, and whether this is today's first.
+  const uint32_t today = houseToday(), last = storageGetInt("pet_day", 0);
+  int streak = storageGetInt("pet_streak", 0);
+  const bool firstToday = today && last != today;
+  if (today && last != today) {
+    streak = last + 1 == today ? streak + 1 : 1;
+    storagePutInt("pet_day", today);
+    storagePutInt("pet_streak", streak);
   }
+  pet::ChoreLuck luck = {onTime, helped, rescued, firstToday, (uint8_t)(streak > 1 ? streak - 1 : 0),
+                         (uint8_t)storageGetInt("pet_dry", 0)};
+  pet::Owned o = owned();
+  const pet::Drop *d = pet::rollDrop(luck, o, randomNumber(), randomNumber(), randomNumber());
+  if (!d) {
+    if (pet::giftsOwned(o) < pet::DROP_COUNT) storagePutInt("pet_dry", luck.dry + 1);
+    return nullptr;
+  }
+  pet::give(o, *d);
+  storagePutBytes("pet_owned", &o, sizeof o);
+  storagePutInt("pet_dry", 0);
+  static char gift[48];
+  snprintf(gift, sizeof gift, "Gift! %s (%s)", d->what, pet::RARITY_NAMES[d->rarity]);
+  char news[64];
+  snprintf(news, sizeof news, "%s Dress me up", gift);
+  houseAddNews(news);
+  return gift;
 }
 
 String petName() { return storageGetString("pet_name"); }
@@ -117,7 +150,6 @@ static void drawAvatar(const pet::Look &look, int scale, int16_t y0, bool eyesCl
 
 static void save() { storagePutInt("pet_look", pet::pack(pet::unpack(draft))); }  // skips the write if unchanged
 
-static uint32_t randomNumber() { return devSeed() ? (uint32_t)rand() : esp_random(); }  // test build: repeatable
 
 // What the Pet says about the household, if anything: a roommate's news first (it cheers them on), then its own
 // chores (proud when done today, sulking while one is late).
@@ -134,7 +166,7 @@ static bool householdSay(char *say, size_t len, HouseFeeling &feeling) {
 
 static void drawMain() {
   const String name = petName();
-  char right[32];  // its name and level (chores give EXP: house/store.cpp)
+  char right[32];  // its name and level (chores give EXP: petChoreDone)
   snprintf(right, sizeof right, "%s%sLv %d", name.c_str(), name.length() ? "  " : "", pet::levelOf(petExp()));
   drawHeader("Pet", right);
   pet::Look look = pet::unpack(petLookBits());
@@ -224,14 +256,14 @@ static Redraw onButton(Event e) {
     screen = MAIN;
     return Redraw::Full;
   } else if ((e == Event::BShort || e == Event::BLong) && row == STYLE_ROW) {
-    // The next (or previous) style; its pieces not earned yet stay as they are.
+    // The next (or previous) style; gifts not found yet stay as they are.
     styleShown = ((styleShown + (e == Event::BShort ? 1 : -1)) % pet::STYLE_COUNT + pet::STYLE_COUNT) % pet::STYLE_COUNT;
-    look = pet::applyStyle(look, pet::STYLES[styleShown], petExp());
+    look = pet::applyStyle(look, pet::STYLES[styleShown], owned());
   } else if (e == Event::BShort && row == RANDOM_ROW) {
     if (devSeed()) srand(devSeed() + draft);
-    look = pet::onlyUnlocked(pet::randomLook(randomNumber), petExp());
+    look = pet::onlyOwned(pet::randomLook(randomNumber), owned());
   } else if ((e == Event::BShort || e == Event::BLong) && row < pet::LAYERS) {
-    pet::stepUnlocked(look, row, e == Event::BShort ? 1 : -1, petExp());  // parts not earned yet are skipped
+    pet::stepOwned(look, row, e == Event::BShort ? 1 : -1, owned());  // gifts not found yet are skipped
   } else {
     return Redraw::None;
   }
@@ -259,9 +291,9 @@ static Redraw onBack() {
 
 static void drawEdit() {
   const pet::Look look = pet::unpack(draft);
-  char exp[24];  // what chores have earned (parts not earned yet are skipped)
-  snprintf(exp, sizeof exp, "%lu EXP", (unsigned long)petExp());
-  drawHeader("Dress up", exp);
+  char gifts[24];  // gifts found so far (the rest are skipped)
+  snprintf(gifts, sizeof gifts, "%d/%d gifts", pet::giftsOwned(owned()), pet::DROP_COUNT);
+  drawHeader("Dress up", gifts);
   drawAvatar(look, EDIT_SCALE, EDIT_AVATAR_Y);
   for (int r = 0; r < ROWS; r++) {  // which row of the editor this is: one dot each
     const int16_t x = display.width() / 2 + (r * 2 - (ROWS - 1)) * 5, y = EDIT_AVATAR_Y + pet::SIZE * EDIT_SCALE + 5;

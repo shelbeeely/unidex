@@ -10,7 +10,7 @@ void phoneStop();
 bool phoneOn();
 void phonePoll();           // call often while on: answers the phone; stops after the idle time
 void phoneActivity();       // a button press counts as use (restarts the idle time)
-const char *phoneSsid();    // "unidex-1A2B" (the same for this device every time)
+const char *phoneSsid();    // "roomiepet-1A2B" (unidex-1A2B off the X4) (the same for this device every time)
 const char *phonePassword();
 const char *phoneJoinCode();  // what the QR code holds: WIFI:T:WPA;S:<ssid>;P:<password>;;
 uint32_t phoneServed();     // pages served since it started

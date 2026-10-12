@@ -3,135 +3,145 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>unidex: install the e-ink pocket OS</title>
-<meta name="description" content="Install unidex on a Waveshare ESP32-S3 1.54&quot; e-paper board from your browser: class timetable with a live countdown, AI voice notes for Obsidian, a Pet that meets your friends' Pets, name badges and one-button games. Free for non-commercial use.">
+<title>RoomiePet: the ChoreGotchi Ecosystem</title>
+<meta name="description" content="RoomiePet: a cooperative household Tamagotchi for roommates on the Xteink X4. Chores, shopping, money and Cash App, and Pets with 90 parts and styles to dress up in: femboy, e-girl, alternative, emo, goth, masc, femme and the bunny lad.">
 <link rel="canonical" href="https://forrest404.github.io/unidex/">
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="unidex">
-<meta property="og:title" content="unidex: an e-ink pocket OS">
-<meta property="og:description" content="Install unidex on a Waveshare ESP32-S3 1.54&quot; e-paper board from your browser: class timetable with a live countdown, AI voice notes for Obsidian, a Pet that meets your friends' Pets, name badges and one-button games. Free for non-commercial use.">
+<meta property="og:site_name" content="RoomiePet">
+<meta property="og:title" content="RoomiePet: the ChoreGotchi Ecosystem">
+<meta property="og:description" content="Chores, shopping, money and Cash App on an Xteink X4, and Pets that dress up in dozens of outfits, with gifts that drop for keeping the house up.">
 <meta property="og:url" content="https://forrest404.github.io/unidex/">
 <meta property="og:image" content="https://forrest404.github.io/unidex/og.png">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="style.css">
-<script type="module" src="https://unpkg.com/esp-web-tools@10.4.0/dist/web/install-button.js?module"></script>
 <style>
-  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 8px 0 28px; }
-  @media (max-width: 640px) { .actions { grid-template-columns: 1fr; } }
-  .actions .card { display: flex; flex-direction: column; gap: 10px; }
-  .actions p { margin: 0; }
-  esp-web-install-button button { width: 100%; }
+  .styles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .pet { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px; text-align: center; }
+  .pet canvas { width: 100%; max-width: 128px; aspect-ratio: 1; image-rendering: pixelated; display: block; margin: 0 auto; }
+  .pet b { display: block; margin-top: 6px; color: #18181b; }
+  .pet small { display: block; color: #5f5f67; font-size: 12px; line-height: 1.35; }
+  button.pet { cursor: pointer; width: 100%; font-weight: 400; min-height: 0; transition: border-color .15s, transform .1s; }
+  button.pet:hover { border-color: var(--fg); opacity: 1; }
+  .try { display: grid; grid-template-columns: 220px 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 640px) { .try { grid-template-columns: 1fr; } }
+  .try canvas { width: 220px; height: 220px; image-rendering: pixelated; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
+  .pickers { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px 12px; }
+  .pickers select { width: 100%; font: inherit; padding: 6px 8px; border: 1px solid var(--field); border-radius: 8px; background: var(--bg); color: var(--fg); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+  .chips button { min-height: 32px; padding: 4px 12px; font-size: 13px; }
+  .wardrobe { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; margin-bottom: 22px; }
+  .wardrobe .pet { padding: 6px; }
+  .wardrobe .pet b { font-size: 12px; }
+  .gift { display: inline-block; margin-top: 2px; padding: 0 6px; border-radius: 999px; font-size: 11px; border: 1px solid #18181b; color: #18181b; }
+  .gift.r2 { background: #18181b; color: #fff; }
+  .gift.r3 { background: linear-gradient(90deg, #7c3aed, #db2777); border-color: transparent; color: #fff; }
+  .odds { border-collapse: collapse; margin-top: 8px; }
+  .odds td, .odds th { padding: 4px 12px 4px 0; text-align: left; border-bottom: 1px solid var(--line); }
+  .features { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 640px) { .features { grid-template-columns: 1fr; } }
+  .features h3 { margin: 0 0 4px; font-size: 15px; }
+  .features p { margin: 0; color: var(--muted); }
+  .cta { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+  .note { color: var(--muted); font-size: 13px; }
 </style>
 </head>
 <body>
 <nav>
-  <a class="brand" href="./">unidex</a>
-  <a href="./" aria-current="page">Install</a>
+  <a class="brand" href="">RoomiePet</a>
+  <a href="" aria-current="page">Home</a>
+  <a href="x4/">Manage your X4</a>
+  <a href="install.html">unidex</a>
   <a href="tools.html">Tools</a>
   <a href="notes.html">Notes</a>
-  <a href="roomiepet.html">RoomiePet</a>
   <a href="https://github.com/Forrest404/unidex">Source code</a>
 </nav>
 <main>
-  <h1>Install unidex</h1>
-  <p class="sub">A small e-ink OS for the Waveshare ESP32-S3-ePaper-1.54: timetable with calendar events, voice
-    notes, a Pet you dress up that plays with your friends' Pets, name badges, one-button games, a WiFi network
-    collection game and a chooser. Install it straight from your browser, with nothing to download.</p>
-  <p class="note">No board yet? Pre-orders for a fully assembled and tested unidex are closed:
-    <a href="https://unidex-site.vercel.app">join the wait list</a>.</p>
-
   <section>
-    <ol>
-      <li>Plug the device into this computer with a USB-C <b>data</b> cable.</li>
-      <li>Press one of its buttons so it's awake.</li>
-      <li>Click a button below and pick <b>USB JTAG/serial debug unit</b> from the list.</li>
-    </ol>
-
-    <div class="actions">
-      <div class="card">
-        <h2>Install</h2>
-        <p class="muted">A fresh start: <b>erases</b> the device's firmware and settings, including the WiFi
-          and keys saved for Notes. Your files live on the micro SD card and aren't touched, and your Pet's friends
-          come back from it.</p>
-        <esp-web-install-button manifest="firmware/install.json">
-          <button slot="activate">Install</button>
-          <span slot="unsupported" class="unsupported">Your browser can't do this. Use <b>Chrome</b> or <b>Edge</b> on a computer.</span>
-          <span slot="not-allowed" class="unsupported">This page must be opened over https.</span>
-        </esp-web-install-button>
-      </div>
-      <div class="card">
-        <h2>Update</h2>
-        <p class="muted">The newest firmware only. <b>Keeps</b> your badges, Dex, calendar events, notes, settings,
-          keys and your Pet.</p>
-        <button id="update" class="secondary">Update</button>
-        <p id="updateStatus" class="status"></p>
-      </div>
-    </div>
-
-    <p class="note">Nothing in the list? The device is asleep: press a button and try again. Still nothing (a brand-new
-      board, or one with other firmware)? Unplug it, hold <b>BOOT</b> while plugging it back in, let go, then try
-      again; press a button after it's installed.</p>
+    <h1>RoomiePet</h1>
+    <p class="note" style="margin-top:-6px"><b>The ChoreGotchi Ecosystem</b></p>
+    <p class="sub">A cooperative household Tamagotchi for roommates, on the <b>Xteink X4</b>. Everyone has their own Pet on
+      their own X4; the Pets share a household, and keeping it up is the game. Do your chores and your Pet is proud,
+      levels up and sometimes finds a gift, like loot from a game. Let the bins slide and it sulks.</p>
+    <div class="cta"><a class="button" href="x4/">Manage your X4</a>
+      <a class="button secondary" style="color:var(--fg);border-color:var(--line-strong);background:transparent"
+         href="https://github.com/Forrest404/unidex/blob/main/docs/X4.md">Build it for the X4</a></div>
+    <p class="note" style="margin-top:12px">An early build: it compiles but hasn't been tested on an X4 yet.</p>
+    <p class="note">Looking for unidex, the pocket OS RoomiePet is built on, for the Waveshare board?
+      <a href="install.html">Install it here</a>.</p>
   </section>
 
   <section>
-    <h2>After installing</h2>
-    <p>Files live on a <b>micro SD card</b> (FAT32) in the device's slot. Send badges, the clock and your calendar from
-      <a href="tools.html">Tools</a>, or copy the
-      <a href="https://github.com/Forrest404/unidex/tree/main/starter">starter files</a> (a <code>badges</code>
-      folder and <code>timetable.csv</code>) to the card. For voice notes, set up WiFi and your keys on
-      <a href="notes.html">Notes</a>. On the device:
-      <b>A</b> = next, <b>B</b> = select, <b>hold A</b> = back, <b>hold B</b> = the screen's extra (each screen
-      shows its buttons), <b>hold A + B</b> for a second = restart. The first time it starts, it shows the buttons and a
-      QR code for this page.</p>
-    <p>Low battery? Things that need a lot of power wait with "Battery too low", and a flat device shows "Charge me"
-      and switches itself off: plug it in, then press PWR. Passing it on? Settings &gt; Reset data &gt;
-      <b>Factory reset</b> wipes the WiFi, keys, Pet and settings (format the SD card too).</p>
-    <p class="note">Version <span id="version">…</span>
-      (<a href="https://github.com/Forrest404/unidex/blob/main/CHANGELOG.md">what's new</a>). Each new release on
-      GitHub updates this page automatically.</p>
+    <h2>Styles</h2>
+    <p class="sub">A whole look in one tap, on the X4 (dress-up, the Style row) or in the web app. Tap one to try it on below.</p>
+    <div class="styles" id="styles"></div>
+  </section>
+
+  <section>
+    <h2>Try a look</h2>
+    <p class="sub">Seven layers, drawn exactly as the X4 draws them (clothes under the face, hair under hats).</p>
+    <div class="try">
+      <canvas id="tryPet" width="192" height="192"></canvas>
+      <div>
+        <div class="chips" id="tryStyles"></div>
+        <div class="pickers" id="pickers"></div>
+        <div class="chips"><button class="secondary" id="random">Random</button><button class="secondary" id="reset">Start again</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>The wardrobe</h2>
+    <p class="sub">Every part, worn by the plain blob. Each style's everyday pieces are starters every Pet has, so nobody
+      has to earn being themselves. The showy ones are <b>gifts</b>: nothing is bought or spent, they drop after chores.</p>
+    <div id="wardrobe"></div>
+    <h3>How gifts drop</h3>
+    <p class="sub">Every chore your Pet does has a chance of a gift, then a roll for how rare it is, then a piece it hasn't
+      found yet (never a duplicate). How the chore went sways the odds:</p>
+    <table class="odds">
+      <tr><th>The chance of a gift</th><td>20%, plus</td></tr>
+      <tr><td>Done by its due day</td><td>+10%</td></tr>
+      <tr><td>Covering a roommate's turn</td><td>+15%</td></tr>
+      <tr><td>Rescuing a late chore</td><td>+10%</td></tr>
+      <tr><td>Your first chore today</td><td>+10%</td></tr>
+      <tr><td>Each day in a row with a chore (up to 5)</td><td>+3%</td></tr>
+      <tr><td>Four chores without a gift</td><td>the next one always brings one</td></tr>
+    </table>
+    <p class="note">Then the rarity: 3% legendary, 22% rare, the rest uncommon, with better odds of rare and legendary
+      for helping out, rescues and streaks. Chores still give EXP (10, or 15 on time), but only for your Pet's level:
+      it's never spent.</p>
+  </section>
+
+  <section>
+    <h2>What it does</h2>
+    <div class="features">
+      <div class="card"><h3>Chores on a rota</h3><p>Whose turn it is, when it's due and what's late. Mark it done on the X4
+        or your phone, and the turn moves on. Your Pet cheers when a roommate finishes theirs.</p></div>
+      <div class="card"><h3>Shopping, reminders, messages</h3><p>A shared list, bin day and rent reminders, and messages
+        your Pet passes on to theirs ("Out of milk!").</p></div>
+      <div class="card"><h3>Money and Cash App</h3><p>Who owes whom, split fairly and settled in the fewest payments. The X4
+        shows a QR code to pay whoever's owed, with the amount, or a Cash App request you pasted. Share it by text, email
+        or the share sheet.</p></div>
+      <div class="card"><h3>No server, no account</h3><p>Hold two X4s near each other and they swap the household over
+        their own radio. Every device ends up the same, whatever order the changes arrive in.</p></div>
+      <div class="card"><h3>A web app for all of it</h3><p>On your phone over the X4's own WiFi (House, Manage on phone), or
+        here on a computer over USB: <a href="x4/">the X4 manager</a>. Its household rules are the X4's own C++, compiled
+        to WebAssembly.</p></div>
+      <div class="card"><h3>Built on FreeInk</h3><p>The X4's screen, buttons, battery, SD card and sleep run through the
+        <a href="https://github.com/Free-Ink/freeink-sdk">FreeInk SDK</a>, the same base as CrossPoint Reader.</p></div>
+    </div>
+    <p class="note" style="margin-top:14px">More: <a href="https://github.com/Forrest404/unidex/blob/main/docs/HOUSEHOLD.md">the household</a>,
+      <a href="https://github.com/Forrest404/unidex/blob/main/docs/WEBAPP.md">the web app</a>,
+      <a href="https://github.com/Forrest404/unidex/blob/main/docs/ROADMAP.md">what's next</a>.</p>
   </section>
 </main>
 <footer class="foot">
+  <span>Built on <a href="install.html">unidex</a> by Forrest404</span>
   <a href="https://github.com/Forrest404/unidex">Source code</a>
   <a href="https://github.com/Forrest404/unidex/blob/main/LICENSE">Licence</a>
   <a href="https://github.com/Forrest404/unidex/blob/main/PRIVACY.md">Privacy</a>
   <a href="https://github.com/Forrest404/unidex/issues">Questions and problems</a>
-  <a href="https://unidex-site.vercel.app">Join the wait list</a>
 </footer>
-<script type="module">
-  // Update writes only the app and never erases (site/update.js), so settings and the SD card stay.
-  import { latestVersion, updateFirmware } from './update.js';
-  const $ = id => document.getElementById(id);
-  let version = 'unknown';
-  latestVersion().then(v => { version = v || version; $('version').textContent = version; });
-
-  const status = text => { $('updateStatus').textContent = text; };
-  if (!('serial' in navigator)) {
-    $('update').disabled = true;
-    status('Use Chrome or Edge on a computer.');
-  }
-
-  $('update').onclick = async () => {
-    let port;
-    try {
-      port = await navigator.serial.requestPort({ filters: [{ usbVendorId: 0x303a }] });
-    } catch (e) {
-      status('No device picked. Nothing listed? The device is asleep: press one of its buttons, then try again.');
-      return;
-    }
-    $('update').disabled = true;
-    try {
-      await updateFirmware(port, status);
-      status(`Updated to ${version}. Your data was kept.`);
-    } catch (e) {
-      status(`Update failed: ${e.message || e}. Unplug the device, hold BOOT while plugging it back in, then try again.`);
-    } finally {
-      $('update').disabled = !('serial' in navigator);
-    }
-  };
-</script>
+<script type="module" src="roomiepet.js"></script>
 </body>
 </html>

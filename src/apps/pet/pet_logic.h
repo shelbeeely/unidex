@@ -66,68 +66,112 @@ inline void stepPart(Look &l, int layer, int step) {
   l.part[layer] = (uint8_t)(((l.part[layer] + step) % n + n) % n);
 }
 
-// ---- Earned cosmetics (RoomiePet). Doing chores gives a Pet EXP (house/store.cpp: 10 a chore, 15 on time); these
-// parts unlock at the EXP shown. Every other part is free from the start (the Bunny body and the Cap among them:
-// the bunny lad needs nothing earned).
-struct Unlock {
-  uint8_t layer, part;
-  uint16_t exp;
-  const char *what;  // for "Unlocked: ..." (the part's name and layer)
+// ---- Gifts (RoomiePet). Nothing is bought or spent: every part is either a starter (every Pet has it from the start,
+// including each style's everyday pieces, so nobody has to earn being themselves) or a gift that drops after a
+// chore, like loot from a game's NPC: a chance raised by how the chore went, then a rarity, then a part this Pet
+// doesn't have yet. A dry spell ends with a guaranteed gift. EXP from chores only sets the Pet's level.
+enum Rarity : uint8_t { STARTER, UNCOMMON, RARE, LEGENDARY };
+static const char *const RARITY_NAMES[] = {"starter", "uncommon", "rare", "legendary"};
+struct Drop {
+  uint8_t layer, part, rarity;
+  const char *what;  // for "Gift! ..." (the part's name and layer)
 };
-// Every style's everyday pieces are free, so nobody has to earn being themselves; the showy ones are goals.
-static const Unlock UNLOCKS[] = {
-  {EXTRA, 5, 30, "Apron"},         {HAT, 10, 40, "Devil horns"},   {HAT, 11, 40, "Halo"},
-  {HAT, 7, 60, "Wizard hat"},      {EXTRA, 10, 60, "Pearls"},      {OUTFIT, 7, 70, "Leather jacket"},
-  {EXTRA, 12, 80, "Bat wings"},    {HAT, 14, 90, "Flower crown"},  {EXTRA, 6, 100, "Feather duster"},
-  {OUTFIT, 6, 110, "Corset"},      {HAT, 12, 120, "Witch hat"},    {HAT, 13, 140, "Veil"},
-  {HAT, 8, 150, "Chef hat"},       {EXTRA, 7, 250, "Medal"},
+static const Drop DROPS[] = {
+  {EXTRA, 5, UNCOMMON, "Apron"},          {HAT, 10, UNCOMMON, "Devil horns"},  {EXTRA, 10, UNCOMMON, "Pearls"},
+  {OUTFIT, 7, UNCOMMON, "Leather jacket"}, {HAT, 14, UNCOMMON, "Flower wreath"}, {EXTRA, 6, UNCOMMON, "Feather duster"},
+  {HAT, 11, RARE, "Halo"},                {HAT, 7, RARE, "Wizard hat"},        {EXTRA, 12, RARE, "Bat wings"},
+  {OUTFIT, 6, RARE, "Corset"},            {HAT, 12, RARE, "Witch hat"},        {HAT, 8, RARE, "Chef hat"},
+  {HAT, 13, LEGENDARY, "Lace veil"},      {EXTRA, 7, LEGENDARY, "Medal"},
 };
-static const int UNLOCK_COUNT = sizeof UNLOCKS / sizeof UNLOCKS[0];
+static const int DROP_COUNT = sizeof DROPS / sizeof DROPS[0];
 
-// The EXP a part needs (0: free).
-inline uint16_t expNeeded(int layer, int part) {
-  for (const Unlock &u : UNLOCKS)
-    if (u.layer == layer && u.part == part) return u.exp;
-  return 0;
+inline const Drop *dropOf(int layer, int part) {
+  for (const Drop &d : DROPS)
+    if (d.layer == layer && d.part == part) return &d;
+  return nullptr;
 }
-inline bool unlocked(int layer, int part, uint32_t exp) { return exp >= expNeeded(layer, part); }
+inline uint8_t rarityOf(int layer, int part) {
+  const Drop *d = dropOf(layer, part);
+  return d ? d->rarity : STARTER;
+}
 
-// stepPart, skipping parts not earned yet.
-inline void stepUnlocked(Look &l, int layer, int step, uint32_t exp) {
+// The gifts a Pet has: one bit per part, per layer (saved in NVS as pet_owned).
+struct Owned {
+  uint16_t layer[LAYERS];
+};
+inline bool owns(const Owned &o, int layer, int part) {
+  return rarityOf(layer, part) == STARTER || (o.layer[layer] >> part & 1);
+}
+inline void give(Owned &o, const Drop &d) { o.layer[d.layer] |= 1 << d.part; }
+inline int giftsOwned(const Owned &o) {
+  int n = 0;
+  for (const Drop &d : DROPS) n += owns(o, d.layer, d.part);
+  return n;
+}
+
+// stepPart, skipping parts this Pet hasn't been given.
+inline void stepOwned(Look &l, int layer, int step, const Owned &o) {
   const int n = partsOf(layer).count;
   for (int i = 0; i < n; i++) {
     stepPart(l, layer, step);
-    if (unlocked(layer, l.part[layer], exp)) return;
+    if (owns(o, layer, l.part[layer])) return;
   }
 }
 
-// A look with any part not earned yet put back to the default (a look set over USB or the web app).
-inline Look onlyUnlocked(Look l, uint32_t exp) {
+// A look with any part not owned put back to the default (a look set over USB or the web app).
+inline Look onlyOwned(Look l, const Owned &o) {
   for (int i = 0; i < LAYERS; i++)
-    if (!unlocked(i, l.part[i], exp)) l.part[i] = DEFAULT_LOOK.part[i];
+    if (!owns(o, i, l.part[i])) l.part[i] = DEFAULT_LOOK.part[i];
   return l;
 }
 
-// The unlock reached between two EXP totals (the first of them), or nullptr.
-inline const Unlock *newlyUnlocked(uint32_t before, uint32_t after) {
-  for (const Unlock &u : UNLOCKS)
-    if (before < u.exp && after >= u.exp) return &u;
-  return nullptr;
+// How a chore went, for the drop: done by its due day, covering a roommate's turn, rescuing a late one, the Pet's
+// first chore today, how many days in a row it has done one, and chores since its last gift.
+struct ChoreLuck {
+  bool onTime, helped, rescued, firstToday;
+  uint8_t streak, dry;
+};
+static const int PITY = 5;  // the 5th chore without a gift always brings one
+
+// The chance of a gift, in percent.
+inline int dropChance(const ChoreLuck &c) {
+  if (c.dry + 1 >= PITY) return 100;
+  int p = 20 + (c.onTime ? 10 : 0) + (c.helped ? 15 : 0) + (c.rescued ? 10 : 0) + (c.firstToday ? 10 : 0) +
+          3 * (c.streak < 5 ? c.streak : 5);
+  return p > 85 ? 85 : p;
 }
 
-// The next unlock above `exp`, or nullptr when everything is earned.
-inline const Unlock *nextUnlock(uint32_t exp) {
-  const Unlock *best = nullptr;
-  for (const Unlock &u : UNLOCKS)
-    if (u.exp > exp && (!best || u.exp < best->exp)) best = &u;
-  return best;
+// The rarity rolled (r: 0-99): better odds of rare and legendary for helping out, rescuing a late chore and streaks.
+inline uint8_t rollRarity(const ChoreLuck &c, uint32_t r) {
+  const int boost = (c.helped ? 3 : 0) + (c.rescued ? 3 : 0) + (c.streak < 7 ? c.streak : 7);
+  const int legendary = 3 + boost / 2, rare = 22 + boost;
+  r %= 100;
+  return r < (uint32_t)legendary ? LEGENDARY : r < (uint32_t)(legendary + rare) ? RARE : UNCOMMON;
+}
+
+// A chore's drop, from three random numbers (the chance, the rarity, which part): a part this Pet doesn't have yet,
+// of the rarity rolled (or the nearest one with any left), or nullptr (no luck this time, or it has everything).
+inline const Drop *rollDrop(const ChoreLuck &c, const Owned &o, uint32_t r1, uint32_t r2, uint32_t r3) {
+  if ((int)(r1 % 100) >= dropChance(c)) return nullptr;
+  const int want = rollRarity(c, r2);
+  static const int SEARCH[4][3] = {{0, 0, 0}, {UNCOMMON, RARE, LEGENDARY}, {RARE, UNCOMMON, LEGENDARY},
+                                   {LEGENDARY, RARE, UNCOMMON}};
+  for (int t : SEARCH[want]) {
+    int left = 0;
+    for (const Drop &d : DROPS) left += d.rarity == t && !owns(o, d.layer, d.part);
+    if (!left) continue;
+    int pick = r3 % left;
+    for (const Drop &d : DROPS)
+      if (d.rarity == t && !owns(o, d.layer, d.part) && pick-- == 0) return &d;
+  }
+  return nullptr;
 }
 
 // Level from EXP: 1 at the start, then one every 50.
 inline int levelOf(uint32_t exp) { return 1 + exp / 50; }
 
 // ---- Styles: whole outfits in one go (dress-up's Style row, the web app). One part per layer, -1 = keep what's
-// worn. Parts not earned yet are left as they are, so a style fills in as its pieces unlock.
+// worn. Gifts this Pet hasn't found yet are left as they are, so a style fills in as they drop.
 struct Style {
   const char *name;
   int8_t part[LAYERS];  // BODY, EYES, MOUTH, HAT, EXTRA, HAIR, OUTFIT
@@ -144,9 +188,9 @@ static const Style STYLES[] = {
 };
 static const int STYLE_COUNT = sizeof STYLES / sizeof STYLES[0];
 
-inline Look applyStyle(Look l, const Style &s, uint32_t exp) {
+inline Look applyStyle(Look l, const Style &s, const Owned &o) {
   for (int i = 0; i < LAYERS; i++)
-    if (s.part[i] >= 0 && s.part[i] < partsOf(i).count && unlocked(i, s.part[i], exp)) l.part[i] = s.part[i];
+    if (s.part[i] >= 0 && s.part[i] < partsOf(i).count && owns(o, i, s.part[i])) l.part[i] = s.part[i];
   return l;
 }
 

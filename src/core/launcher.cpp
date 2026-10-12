@@ -9,6 +9,7 @@
 #include "theme.h"
 #include "../apps/apps.h"
 #include <qrcode.h>
+#include "board.h"
 
 static const int HOME = -1, NO_CARD = -2, WELCOME = -3;
 RTC_DATA_ATTR static int current = HOME;  // open app, HOME, NO_CARD or WELCOME
@@ -102,7 +103,7 @@ static void drawSplash() {
   display.drawRect(mx, my + S + G, S, S, BLACK);
   display.fillRect(mx + S + G, my + S + G, S, S, BLACK);
   display.setFont(FONT_LARGE);
-  drawCentered("unidex", 128);
+  drawCentered(DEVICE_NAME, 128);
 }
 
 // --- welcome: the first start of a new (or factory reset) device ---

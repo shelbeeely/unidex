@@ -1,4 +1,4 @@
-# RoomiePet roadmap (Xteink X4)
+# RoomiePet roadmap: the ChoreGotchi Ecosystem (Xteink X4)
 
 RoomiePet turns household upkeep into a cooperative multiplayer Tamagotchi. Every roommate has an Xteink X4 on the
 fridge, a door or a desk. Each person's Pet lives in a shared virtual House, and the Pets' health, happiness and
@@ -18,7 +18,7 @@ gets no new features. New work goes behind `UNIDEX_X4`, and the X4's hardware go
 | Buttons | All seven keys fold into two (arrows = A, Confirm/Power = B, Back = hold A) | Up/Down, Left/Right, Confirm and Back as themselves (phase 1) |
 | Household | House app: chores on a rota, shopping, money, reminders, Pet messages, roommates, Sync (`docs/HOUSEHOLD.md`) | Taskdex, House Health, monsters, EXP, nudges, visits |
 | Syncing | Only while Sync is open on both devices | Completions reach the house within minutes (phase 1) |
-| Pets | Look and name; sulk, proud, cheer and pass on messages | Levels, evolution, the Harmony Aura, unlockable cosmetics |
+| Pets | Look and name; sulk, proud, cheer and pass on messages | Evolution, the Harmony Aura |
 | Time | Synced from the internet, USB or a roommate; London time zone hard-coded | A time-zone setting (phase 1) |
 | Security | Anyone in radio range can join a household; any member can edit any record | Join approval, an encrypted household and records only their owner can change (phase 1; required before Cash App codes) |
 
@@ -81,14 +81,16 @@ X4 managed from a browser over USB or the X4's own WiFi, with the household rule
 
 ## Phase 5: pet progression (started)
 
-Done so far: EXP for chores (10, 15 on time), levels every 50 EXP, and earned parts (Apron 30, Wizard hat 60, Feather
-duster 100, Chef hat 150, Medal 250); the free Cap makes the bunny lad (docs/HOUSEHOLD.md). Still to do below: EXP
-from the shared done-log (so it's the same on every device), evolution, the Harmony Aura and streak cosmetics.
+Done so far: EXP for chores (10, 15 on time) and levels every 50 EXP; EXP is never spent. Cosmetics are **gifts**
+that drop after chores like loot (uncommon, rare, legendary), with better odds for on-time chores, covering a
+roommate's turn, rescuing a late chore, the first chore of the day and streaks, and a sure gift after a dry spell
+(docs/HOUSEHOLD.md#gifts). The starter Cap makes the bunny lad. Still to do below: EXP from the shared done-log (so
+it's the same on every device), evolution, and the Harmony Aura.
 
 
 - **EXP:** each chore done gives its weight in EXP to the Pet that did it, worked out from the shared done-log, so it's the same on every device and can't be inflated locally. On-time completions give a bonus.
 - **Levels and evolution:** Pets grow through stages (Hatchling, Housemate, Guardian) at EXP thresholds. Each stage adds art (size, a cape, a crest), so a Guardian looks the part.
-- **Harmony Aura:** on a day when every chore due has been done, by everyone, the aura shows on every screen (a sparkle frame around the room) and every Pet gets bonus EXP. Streaks of Harmony days unlock cosmetics: a tiny wizard hat, a clean apron, a feather duster, a crown for a 30-day streak. They're added as new parts in `parts.h`, worn through dress-up.
+- **Harmony Aura:** on a day when every chore due has been done, by everyone, the aura shows on every screen (a sparkle frame around the room) and every Pet gets bonus EXP. Harmony days raise everyone's gift odds, and long Harmony streaks add their own drops (a crown for a 30-day streak) to `DROPS` in `pet_logic.h`.
 - **Happiness:** a Pet's happiness follows the House Health and its owner's own record. Sulking, proud and cheering stay as they are, with "weary" for a messy house.
 
 ## Phase 6: Neighbors (pet-to-pet)

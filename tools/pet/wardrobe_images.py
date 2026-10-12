@@ -10,7 +10,8 @@ from PIL import Image, ImageDraw, ImageFont
 root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 art = open(os.path.join(root, "site/x4/pet-art.js")).read()
 def const(name): return json.loads(re.search(rf"export const {name} = (.*?);\n", art).group(1))
-LAYERS, ORDER, STYLES, UNLOCKS = const("LAYERS"), const("DRAW_ORDER"), const("STYLES"), const("UNLOCKS")
+LAYERS, ORDER, STYLES, DROPS, RARITIES = (const("LAYERS"), const("DRAW_ORDER"), const("STYLES"), const("DROPS"),
+                                          const("RARITIES"))
 DEFAULT = [0, 0, 0, 0, 1, 0, 0]
 font_path = os.path.join(root, "tools/fonts/LiberationSans-Bold.ttf")
 font = lambda size: ImageFont.truetype(font_path, size)
@@ -49,8 +50,8 @@ for i, st in enumerate(STYLES):
     d.text((x + (tile - tw) / 2, pad + tile + 8), t, fill=INK, font=font(22))
 img.save(os.path.join(root, "docs/roomiepet-styles.png"), optimize=True)
 
-# The wardrobe: every hair, outfit, hat, extra, eyes and mouth, each worn by the plain blob, EXP shown on earned ones.
-need = {(u["layer"], u["part"]): u["exp"] for u in UNLOCKS}
+# The wardrobe: every hair, outfit, hat, extra, eyes and mouth, each worn by the plain blob, gifts marked by rarity.
+rarity = {(g["layer"], g["part"]): g["rarity"] for g in DROPS}
 rows_of = [(5, "Hair"), (6, "Outfits"), (3, "Hats"), (4, "Extras"), (1, "Eyes"), (2, "Mouths"), (0, "Bodies")]
 scale, pad, cell, name_h, head = 3, 12, 96, 40, 34
 cols = 16
@@ -70,8 +71,8 @@ for layer, title in rows_of:
         name = part["name"]
         tw = d.textlength(name, font=font(14))
         d.text((x + (cell - tw) / 2, y + cell + 4), name, fill=INK, font=font(14))
-        if (layer, i) in need:
-            e = f"{need[(layer, i)]} EXP"
+        if (layer, i) in rarity:
+            e = RARITIES[rarity[(layer, i)]] + " gift"
             tw = d.textlength(e, font=font(12))
             d.text((x + (cell - tw) / 2, y + cell + 21), e, fill=MUTED, font=font(12))
     y += cell + name_h + pad

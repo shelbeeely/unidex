@@ -1,4 +1,4 @@
-# The House: a household for roommates' Pets
+# The House: a household for roommates' Pets (RoomiePet)
 
 Each roommate keeps their own Pet, and the Pets share a household: who does which chore, what to buy, who paid
 for what, the bin day and the rent, and messages the Pets pass on. There is no server and no account. Roommates'
@@ -65,15 +65,15 @@ device.
   home screen meanwhile.
 - On a reminder's day it says so ("Bin day today!").
 
-## Dress-up, styles and earning cosmetics
+## Dress-up, styles and gifts
 
 A Pet's look has seven layers: Body, Eyes, Mouth, Hat, Extra, **Hair** and **Outfit**. It's drawn in this order:
 the body, its outfit, the face, the hair (a fringe can cover an eye), then hats and extras. Dress it up on the X4
 (Pet, B) or in the web app (Settings), which shows a live preview.
 
 **Styles** put on a whole look in one go. On the X4 it's the **Style** row in dress-up (B: next, hold B: previous);
-in the web app, a button each. A style leaves anything it doesn't name as it is, and any piece not earned yet stays
-as it was until it is.
+in the web app, a button each. A style leaves anything it doesn't name as it is, and any gift not found yet stays
+as it was until it drops.
 
 | Style | What it puts on |
 |---|---|
@@ -86,7 +86,7 @@ as it was until it is.
 | Femme | Lashes, lipstick, flower wreath*, pearls*, long waves, sundress |
 | Bunny lad | The Bunny body, backwards cap, bow tie |
 
-\* earned (below). Everything else in every style is free, so nobody has to earn being themselves.
+\* a gift (below). Everything else in every style is a starter every Pet has, so nobody has to earn being themselves.
 
 All the parts:
 
@@ -98,30 +98,37 @@ All the parts:
 - **Extras** (new): Choker (with a bell), Studs, Pearls, Chain, Bat wings, Hearts, Ankh, Bandaid (and Apron, Duster,
   Medal)
 
-### Earning
+### Gifts
 
-Every chore your Pet does earns it EXP: 10, or 15 when it's done by its due day (on the X4 or in the web app). Each
-50 EXP is a level (on the Pet screen's header). These parts unlock with EXP; the Pet says when one does ("Unlocked:
-Halo! Dress me up"):
+Nothing is bought or spent. Like loot from a game's NPC, a gift can drop each time your Pet does a chore (on the X4
+or in the web app): first a chance, then how rare it is, then a piece your Pet hasn't found yet, never a duplicate.
+The Pet says what it found ("Gift! Halo (rare) Dress me up") and the X4 shows it when you mark the chore done.
 
-| EXP | Unlocks |
+| What sways the chance | |
 |---|---|
-| 30 | Apron |
-| 40 | Devil horns, Halo |
-| 60 | Wizard hat, Pearls |
-| 70 | Leather jacket |
-| 80 | Bat wings |
-| 90 | Flower wreath |
-| 100 | Feather duster |
-| 110 | Corset |
-| 120 | Witch hat |
-| 140 | Lace veil |
-| 150 | Chef hat |
-| 250 | Medal |
+| Every chore | 20% |
+| Done by its due day | +10% |
+| Covering a roommate's turn | +15% |
+| Rescuing a late chore | +10% |
+| Your first chore today | +10% |
+| Each day in a row with a chore, up to 5 | +3% |
+| 4 chores in a row without a gift | the 5th always brings one |
 
-Parts not earned yet are skipped in dress-up and refused if set over USB or from the web app. EXP is kept on each X4
-(it's that Pet's own); it isn't shared with the household yet. Roommates do see each other's looks, outfits and all,
-at Sync and when the Pets meet.
+Then the rarity: 3% legendary, 22% rare, the rest uncommon. Covering a roommate's turn and rescuing a late chore
+each add 3 points to rare (and 1.5 to legendary), and each day of a streak 1 more (up to 7). If none of the rolled
+rarity are left, the nearest rarity that has some is given instead.
+
+| Rarity | Gifts |
+|---|---|
+| Uncommon | Apron, Devil horns, Pearls, Leather jacket, Flower wreath, Feather duster |
+| Rare | Halo, Wizard hat, Bat wings, Corset, Witch hat, Chef hat |
+| Legendary | Lace veil, Medal |
+
+Chores still give EXP, 10 or 15 on time, but only for the Pet's level (each 50 EXP, on the Pet screen's header): it
+is never spent. Gifts not found yet are skipped in dress-up and refused if set over USB or from the web app, which
+shows them as "not found yet". Gifts are kept on each X4 (they're that Pet's own) and aren't shared with the
+household; roommates do see each other's looks, outfits and all, at Sync and when the Pets meet. The odds are in
+`src/apps/pet/pet_logic.h` (`dropChance`, `rollRarity`, `rollDrop`), checked by `tools/pettest`.
 
 The website's Tools page designer still shows the first five layers only: saving a look from it takes off the hair
 and outfit (put them back on the X4 or in its web app).

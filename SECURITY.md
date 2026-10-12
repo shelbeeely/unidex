@@ -13,7 +13,7 @@ You'll get an answer when it has been looked at. Please give it time to be fixed
 ## What's covered
 
 The latest release only. Updates come out as new releases on GitHub and the website
-(https://forrest404.github.io/unidex/); update with the website's Update button.
+(https://forrest404.github.io/unidex/install.html); update with the website's Update button.
 
 ## Good to know
 
