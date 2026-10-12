@@ -33,6 +33,8 @@ src/
   apps/pet/             pet.cpp (Pet, Dress up, Name), parts.h (the art), meet.cpp (Meet), meet_logic.h,
                         friends_logic.h, send_logic.h (the radio rules, tested on a computer), usb.cpp (P commands)
   apps/badge/           badge.cpp, badge_file.* (BMP checks, shared with the USB upload and Pet)
+  apps/house/           house.cpp (the House's screens and Sync), store.cpp (/house.dat, the Pet's mood), house_logic.h
+                        (records, merging, rota, money, radio packets; tools/housetest), see HOUSEHOLD.md
   core/
     launcher.*          splash, home carousel, routes buttons to the open app
     display.*           e-paper driver (SSD1681) and the refresh rule
@@ -114,7 +116,7 @@ disappears while it sleeps.
   Each test file's first lines give its build command, e.g.
   `c++ -std=c++17 -O2 -I src/apps/pet tools/meettest/meet_test.cpp -o /tmp/meet_test && /tmp/meet_test`.
   `tools/pettest`, `tools/meettest` (Meet, friends, badge sending), `tools/batterytest`, `tools/notetest`,
-  `tools/gametest`. `tools/run_tests.sh` builds and runs them all.
+  `tools/gametest`, `tools/housetest` (the household). `tools/run_tests.sh` builds and runs them all.
 - **On GitHub:** every push and pull request runs `.github/workflows/ci.yml`: the computer tests and both firmware
   builds. Library and platform versions are pinned in `platformio.ini`, so a build only changes when they're
   changed there.

@@ -6,6 +6,7 @@
 #include "meet.h"
 #include "pet.h"
 #include "pet_logic.h"
+#include "../house/house.h"
 #include "../../core/app.h"
 #include "../../core/devtools.h"
 #include "../../core/display.h"
@@ -103,13 +104,36 @@ static void save() { storagePutInt("pet_look", pet::pack(pet::unpack(draft))); }
 
 static uint32_t randomNumber() { return devSeed() ? (uint32_t)rand() : esp_random(); }  // test build: repeatable
 
+// What the Pet says about the household, if anything: a roommate's news first (it cheers them on), then its own
+// chores (proud when done today, sulking while one is late).
+static bool householdSay(char *say, size_t len, HouseFeeling &feeling) {
+  if (houseNews(say, len)) {
+    feeling = HouseFeeling::Proud;
+    return true;
+  }
+  const HouseMood mood = houseMood();
+  feeling = mood.feeling;
+  strlcpy(say, mood.say, len);
+  return say[0] != 0;
+}
+
 static void drawMain() {
   const String name = petName();
   drawHeader("Pet", name.length() ? name.c_str() : nullptr);
   pet::Look look = pet::unpack(petLookBits());
-  if (happy) look.part[pet::EYES_LAYER] = pet::HAPPY_EYES;
-  drawAvatar(look, MAIN_SCALE, MAIN_Y, blinking);
-  if (heart) petDrawHeart(175, CONTENT_TOP + 16, heart);  // beside the head
+  char say[64];
+  HouseFeeling feeling = HouseFeeling::Normal;
+  const bool talking = householdSay(say, sizeof say, feeling);
+  if (happy || feeling == HouseFeeling::Proud) look.part[pet::EYES_LAYER] = pet::HAPPY_EYES;
+  const bool eyesShut = blinking || (feeling == HouseFeeling::Sulky && !happy);  // sulking: eyes down
+  if (talking) {  // a little smaller, with its words over its head
+    const int16_t bubbleBottom = CONTENT_TOP + 26;
+    petDrawBubble(fitText(say, display.width() - 12).c_str(), display.width() / 2, bubbleBottom);
+    drawAvatar(look, MAIN_SCALE - 1, bubbleBottom + 2, eyesShut);
+  } else {
+    drawAvatar(look, MAIN_SCALE, MAIN_Y, eyesShut);
+  }
+  if (heart) petDrawHeart(175, CONTENT_TOP + 16 + (talking ? 30 : 0), heart);  // beside the head
   drawHints("hi", "dress up", "meet");
 }
 
@@ -125,6 +149,7 @@ static Redraw sayHi() {
   delay(700);
   happy = false;
   heart = 0;
+  houseNewsSeen();  // it has passed on the household's news
   displayClean(drawMain);
   powerRelease();
   return Redraw::None;
@@ -367,6 +392,11 @@ static void status(char *out, size_t len) {
     seen = changes;
     strlcpy(name, petName().c_str(), sizeof name);
     named = name[0] != 0;
+  }
+  char news[48];
+  if (houseNews(news, sizeof news)) {
+    strlcpy(out, news, len);
+    return;
   }
   const int friends = meetFriendCount();
   if (friends && named) snprintf(out, len, "%s, %d friend%s", name, friends, friends == 1 ? "" : "s");

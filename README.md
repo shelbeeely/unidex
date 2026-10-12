@@ -33,6 +33,7 @@ available, join the wait list at [unidex-site.vercel.app](https://unidex-site.ve
 | **Dex** | A WiFi collection game: every new network name nearby is logged with a rarity. |
 | **Chooser** | Pick 2–6 squares, spin, get a random winner. |
 | **Games** | Four one-button games: Flappy, Dino, Stack and Jetpack, with best scores. |
+| **House** | A household for roommates' Pets: chores on a rota, the shopping list, who owes whom, bin day and rent, and messages the Pets pass on. Devices swap it when held together. See [docs/HOUSEHOLD.md](docs/HOUSEHOLD.md). |
 | **Settings** | Date and time, sleep, invert, battery and info, reset data, factory reset. |
 
 **New in v1.6:** it protects a low battery (and switches off when it's flat), saves files so a full card or a

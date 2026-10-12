@@ -4,6 +4,7 @@
 // Shared by the Pet screen (pet.cpp) and its USB commands (usb.cpp).
 uint32_t petLookBits();  // the saved look, as pet_logic.h packs it
 String petName();        // "" if none is set
+uint32_t petId();        // this device's Pet: a random number made once (meet.cpp); its id in the household too
 void petChanged();       // the website saved a new look or name: the Pet screen redraws
 enum class PetMood : uint8_t { Normal, Happy, Blink };
 // A Pet's look, scale x 32 px, its top left at x0, y0 (parts off the screen are skipped); Happy and Blink swap in

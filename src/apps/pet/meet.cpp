@@ -71,6 +71,8 @@ static uint32_t myId() {
   return id;
 }
 
+uint32_t petId() { return myId(); }
+
 // Friends: asked after a first greeting ("Be friends?"); both must say yes. Kept in NVS ("pet_friends").
 static friends::List buddies;
 static bool buddiesLoaded, asking;  // asking: the "Be friends?" question is on screen

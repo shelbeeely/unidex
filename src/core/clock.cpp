@@ -14,6 +14,9 @@ static const uint8_t PCF_ADDR = 0x51, PCF_CONTROL1 = 0x00, PCF_SECONDS = 0x04;  
 static const uint8_t CONTROL1_STOP = 0x20, CONTROL1_12H = 0x02;  // 0x00 = running, 24-hour mode
 static const int PIN_SDA = 47, PIN_SCL = 48;
 static const uint32_t NTP_TIMEOUT_MS = 8000;
+RTC_DATA_ATTR static time_t trustedAt;  // kept through deep sleep, like the time itself
+
+time_t clockTrustedAt() { return trustedAt; }
 
 static uint8_t fromBcd(uint8_t v) { return (v >> 4) * 10 + (v & 0x0F); }
 static uint8_t toBcd(uint8_t v) { return (v / 10) << 4 | v % 10; }
@@ -84,6 +87,7 @@ void clockBegin() {
   struct timeval tv = {mktime(&t), 0};
   setTz(TZ_LONDON);
   settimeofday(&tv, nullptr);
+  trustedAt = tv.tv_sec;  // the chip keeps good time
 }
 #endif
 
@@ -130,7 +134,10 @@ const char *clockSync() {
       powerAlive();
       delay(100);
     }
-    if (sntp_get_sync_status() == SNTP_SYNC_STATUS_COMPLETED) writeChipNow();
+    if (sntp_get_sync_status() == SNTP_SYNC_STATUS_COMPLETED) {
+      writeChipNow();
+      trustedAt = time(nullptr);
+    }
     else err = "no time server";
 #if ESP_ARDUINO_VERSION_MAJOR >= 3
     esp_sntp_stop();
@@ -150,6 +157,12 @@ void clockSet(time_t utc) {
   struct timeval tv = {utc, 0};
   settimeofday(&tv, nullptr);
   writeChipNow();
+  trustedAt = utc;
+}
+
+void clockAdopt(time_t utc, time_t from) {
+  clockSet(utc);
+  trustedAt = from;
 }
 
 void clockStatus(char *out, size_t len) {
