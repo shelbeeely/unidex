@@ -2,6 +2,14 @@
 // as used by Waveshare's 08_Audio_Test for this board. That library needs ESP-IDF 5, so this is a small
 // standalone version on the legacy I2S driver and the Wire bus the clock chip already uses.
 #include "audio.h"
+#include "board.h"
+
+#if UNIDEX_X4
+// The Xteink X4 has no microphone: Notes isn't on its home screen, and a recording asked for over USB fails.
+bool audioBegin() { return false; }
+size_t audioRead(int16_t *, size_t) { return 0; }
+void audioEnd() {}
+#else
 #include <Arduino.h>
 #include <Wire.h>
 #include <driver/i2s.h>
@@ -117,3 +125,4 @@ void audioEnd() {
   digitalWrite(PIN_AUDIO_PWR, HIGH);
   running = false;
 }
+#endif

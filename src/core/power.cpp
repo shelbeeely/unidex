@@ -2,6 +2,7 @@
 #include "input.h"
 #include "storage.h"
 #include "battery.h"
+#include "board.h"
 #include "display.h"
 #include "theme.h"
 #include <Arduino.h>
@@ -11,13 +12,27 @@
 
 static uint32_t idleMs = 10000;  // Settings: 10, 20, 30 or 60 s (NVS sleep_s)
 
+#if UNIDEX_X4
+// Xteink X4: GPIO13 HIGH keeps battery power on (LOW cuts it). The panel has no power switch. Deep sleep can wake
+// only on GPIO0-5 going LOW: Power (GPIO3) and the two button ladders (GPIO1, GPIO2), which only Right and Down
+// pull low enough. Light sleep can't see the other ladder keys either, so naps there are short (powerNap).
+static const gpio_num_t PIN_LATCH = GPIO_NUM_13;
+static const gpio_num_t PIN_EPD_RST = GPIO_NUM_5;
+static const gpio_num_t PIN_EPD_CS = GPIO_NUM_21;
+static const gpio_num_t WAKE_PINS[] = {GPIO_NUM_1, GPIO_NUM_2, GPIO_NUM_3};
+static const uint64_t WAKE_MASK = (1ULL << GPIO_NUM_1) | (1ULL << GPIO_NUM_2) | (1ULL << GPIO_NUM_3);
+static const uint32_t NAP_MAX_MS = 40;  // a press is at least ~80 ms: still caught, and debounced as usual
+#else
 static const gpio_num_t PIN_LATCH = GPIO_NUM_17;      // HIGH keeps battery power on; has a pull-down
 static const gpio_num_t PIN_AUDIO_PWR = GPIO_NUM_42;  // active LOW; external pull-up keeps it off in sleep
 static const gpio_num_t PIN_EPD_PWR = GPIO_NUM_6;     // active LOW
 static const gpio_num_t PIN_EPD_RST = GPIO_NUM_9;
 static const gpio_num_t PIN_EPD_CS = GPIO_NUM_11;
 // Both buttons have external 10k pull-ups, so no internal pull-ups are needed in sleep.
+static const gpio_num_t WAKE_PINS[] = {GPIO_NUM_0, GPIO_NUM_18};
 static const uint64_t WAKE_MASK = (1ULL << GPIO_NUM_0) | (1ULL << GPIO_NUM_18);
+static const uint32_t NAP_MAX_MS = UINT32_MAX;
+#endif
 
 static uint32_t lastActivity;
 static void deepSleep(uint64_t timerUs);
@@ -41,7 +56,11 @@ void powerInit() {
   // Set each level before releasing the hold from the last sleep. A released pin floats, and
   // the pull-ups/downs would then cut battery power or the panel's power (losing its image).
   const struct { gpio_num_t pin; int level; } held[] = {
+#if UNIDEX_X4
+    {PIN_LATCH, HIGH}, {PIN_EPD_RST, HIGH}, {PIN_EPD_CS, HIGH},
+#else
     {PIN_LATCH, HIGH}, {PIN_EPD_PWR, LOW}, {PIN_EPD_RST, HIGH}, {PIN_EPD_CS, HIGH},
+#endif
   };
   for (auto &h : held) {
     pinMode(h.pin, OUTPUT);
@@ -51,8 +70,10 @@ void powerInit() {
   gpio_deep_sleep_hold_dis();
   idleMs = storageGetInt("sleep_s", 10) * 1000;
 
+#if !UNIDEX_X4
   pinMode(PIN_AUDIO_PWR, OUTPUT);
   digitalWrite(PIN_AUDIO_PWR, HIGH);
+#endif
 
   setCpuFrequencyMhz(80);
   lastActivity = millis();
@@ -89,14 +110,20 @@ void powerSleepIfIdle() {
 // partial. RST/CS stay HIGH so it isn't woken or selected. A button wakes it (and, if timerUs, the timer).
 static void deepSleep(uint64_t timerUs) {
   gpio_hold_en(PIN_LATCH);
+#if !UNIDEX_X4
   gpio_hold_en(PIN_EPD_PWR);
+#endif
   gpio_hold_en(PIN_EPD_RST);
   gpio_hold_en(PIN_EPD_CS);
   gpio_deep_sleep_hold_en();
 
   storageEnd();  // unmount the SD card cleanly (it stays powered: no switch on its supply)
   esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);  // drop powerNap's timer and GPIO sources
+#if UNIDEX_X4
+  esp_deep_sleep_enable_gpio_wakeup(WAKE_MASK, ESP_GPIO_WAKEUP_GPIO_LOW);
+#else
   esp_sleep_enable_ext1_wakeup(WAKE_MASK, ESP_EXT1_WAKEUP_ANY_LOW);
+#endif
   if (timerUs) esp_sleep_enable_timer_wakeup(timerUs);
   esp_deep_sleep_start();
 }
@@ -124,9 +151,9 @@ void powerNap() {
   uint32_t napMs = idleMs - idle;  // wake for the deep-sleep check, or sooner if an app asked
   if (wakeWithin && wakeWithin < napMs) napMs = wakeWithin;
   wakeWithin = 0;
+  if (napMs > NAP_MAX_MS) napMs = NAP_MAX_MS;  // the X4's ladder keys are only seen by polling
   esp_sleep_enable_timer_wakeup((uint64_t)napMs * 1000);
-  gpio_wakeup_enable(GPIO_NUM_0, GPIO_INTR_LOW_LEVEL);
-  gpio_wakeup_enable(GPIO_NUM_18, GPIO_INTR_LOW_LEVEL);
+  for (gpio_num_t pin : WAKE_PINS) gpio_wakeup_enable(pin, GPIO_INTR_LOW_LEVEL);
   esp_sleep_enable_gpio_wakeup();
   esp_light_sleep_start();  // (the watchdog's timer stops in light sleep too)
   powerAlive();

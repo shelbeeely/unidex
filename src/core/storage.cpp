@@ -1,19 +1,30 @@
 #include "storage.h"
 #include <LittleFS.h>  // only for the one-time copy from internal flash
 #include <Preferences.h>
-#include <SD_MMC.h>
 #include <nvs_flash.h>
+#include "board.h"
 #include "devtools.h"
 
-static const char *NVS_NAMESPACE = "unidex";
+#if UNIDEX_X4
+// Xteink X4: the card is on the panel's SPI bus (SCK 8, MOSI 10, MISO 7; displayInit starts it), selected by GPIO12.
+#include <SD.h>
+#include <SPI.h>
+static fs::SDFS &CARD = SD;
+static const int SD_CS = 12;
+#else
+#include <SD_MMC.h>
+static fs::SDMMCFS &CARD = SD_MMC;
 static const int SD_CLK = 39, SD_CMD = 41, SD_D0 = 40;  // Waveshare 04_SD_Card example + schematic
+#endif
+
+static const char *NVS_NAMESPACE = "unidex";
 static bool cardMounted;
 
 // A power cut between the two renames in storageRename leaves only the old copy, under "<path>.old": put it back.
 static void recover(const char *path) {
-  if (SD_MMC.exists(path)) return;
+  if (CARD.exists(path)) return;
   const String old = String(path) + ".old";
-  if (SD_MMC.exists(old)) SD_MMC.rename(old, path);
+  if (CARD.exists(old)) CARD.rename(old, path);
 }
 
 fs::File storageOpen(const char *path, const char *mode) {
@@ -21,39 +32,39 @@ fs::File storageOpen(const char *path, const char *mode) {
   if (*mode == 'r') recover(path);
   if (*mode != 'r') {  // FAT won't create a file in a missing folder (e.g. /badges on a new card)
     String dir = String(path).substring(0, String(path).lastIndexOf('/'));
-    if (dir.length() && !SD_MMC.exists(dir)) SD_MMC.mkdir(dir);
+    if (dir.length() && !CARD.exists(dir)) CARD.mkdir(dir);
   }
-  return SD_MMC.open(path, mode);
+  return CARD.open(path, mode);
 }
 
 bool storageExists(const char *path) {
   if (!storageCardMount()) return false;
   recover(path);
-  return SD_MMC.exists(path);
+  return CARD.exists(path);
 }
 
 // FAT won't rename onto an existing file. The old copy is moved aside first and removed only once the new one is in
 // place, so at every moment one of them is there whole.
 bool storageRename(const char *from, const char *to) {
-  if (!storageCardMount() || !SD_MMC.exists(from)) return false;
+  if (!storageCardMount() || !CARD.exists(from)) return false;
   const String old = String(to) + ".old";
-  const bool had = SD_MMC.exists(to);
+  const bool had = CARD.exists(to);
   if (had) {
-    if (SD_MMC.exists(old)) SD_MMC.remove(old);  // checked first: removing a missing file logs an error on USB
-    if (!SD_MMC.rename(to, old)) return false;
+    if (CARD.exists(old)) CARD.remove(old);  // checked first: removing a missing file logs an error on USB
+    if (!CARD.rename(to, old)) return false;
   }
-  if (!SD_MMC.rename(from, to)) {
-    if (had) SD_MMC.rename(old, to);
+  if (!CARD.rename(from, to)) {
+    if (had) CARD.rename(old, to);
     return false;
   }
-  if (had) SD_MMC.remove(old);
+  if (had) CARD.remove(old);
   return true;
 }
 
 bool storageReplace(const char *tmp, const char *to, size_t bytes) {
   bool ok = storageCardMount();
   if (ok) {
-    fs::File f = SD_MMC.open(tmp);  // the size the card really has: a full card fails when the file is closed
+    fs::File f = CARD.open(tmp);  // the size the card really has: a full card fails when the file is closed
     ok = f && !f.isDirectory() && f.size() == bytes;
   }
   ok = ok && storageRename(tmp, to);
@@ -71,7 +82,7 @@ bool storageReadLine(fs::File &f, String &line, size_t max) {
 
 bool storageRemove(const char *path) {
   // Checked first: removing a missing file would log an error onto the USB line.
-  return storageCardMount() && SD_MMC.exists(path) && SD_MMC.remove(path);
+  return storageCardMount() && CARD.exists(path) && CARD.remove(path);
 }
 
 // A read-only open of a namespace that doesn't exist yet (a new or fully erased board) prints an error line on
@@ -156,16 +167,16 @@ void storageEraseAll() {
 
 bool storageUsage(uint64_t &used, uint64_t &total) {
   if (!storageCardMount()) return false;
-  used = SD_MMC.usedBytes();
-  total = SD_MMC.totalBytes();
+  used = CARD.usedBytes();
+  total = CARD.totalBytes();
   return true;
 }
 
 // Files used to live in internal flash (LittleFS). The first time a card mounts, copy any of them the
 // card doesn't have yet (never overwriting), once. Each file is streamed and written in one go.
 static void copyFile(const String &path) {
-  if (SD_MMC.exists(path) || !LittleFS.exists(path)) return;
-  fs::File in = LittleFS.open(path, "r"), out = SD_MMC.open(path, "w");
+  if (CARD.exists(path) || !LittleFS.exists(path)) return;
+  fs::File in = LittleFS.open(path, "r"), out = CARD.open(path, "w");
   uint8_t buf[512];
   for (size_t n; in && out && (n = in.read(buf, sizeof buf)) > 0;) out.write(buf, n);
 }
@@ -176,7 +187,7 @@ static void copyFromFlashOnce() {
     copyFile("/timetable.csv");
     copyFile("/dex.csv");
     copyFile("/events.csv");
-    if (!SD_MMC.exists("/badges")) SD_MMC.mkdir("/badges");
+    if (!CARD.exists("/badges")) CARD.mkdir("/badges");
     fs::File dir = LittleFS.open("/badges");
     for (fs::File f = dir ? dir.openNextFile() : fs::File(); f; f = dir.openNextFile()) {
       String n = f.name();
@@ -190,10 +201,14 @@ static void copyFromFlashOnce() {
 bool storageCardMount() {
   if (devNoCard()) return false;  // test build switch (X NOCARD 1)
   if (cardMounted) return true;
-  SD_MMC.setPins(SD_CLK, SD_CMD, SD_D0);
-  cardMounted = SD_MMC.begin("/sdcard", true /*1-bit*/, false /*never format: it would erase the card*/);
+#if UNIDEX_X4
+  cardMounted = CARD.begin(SD_CS, SPI, 20000000, "/sdcard");  // SD.begin never formats the card
+#else
+  CARD.setPins(SD_CLK, SD_CMD, SD_D0);
+  cardMounted = CARD.begin("/sdcard", true /*1-bit*/, false /*never format: it would erase the card*/);
+#endif
   if (!cardMounted) {
-    SD_MMC.end();  // missing, not FAT, or broken
+    CARD.end();  // missing, not FAT, or broken
     return false;
   }
   copyFromFlashOnce();
@@ -202,12 +217,12 @@ bool storageCardMount() {
 
 void storageEnd() {
   if (!cardMounted) return;
-  SD_MMC.end();
+  CARD.end();
   cardMounted = false;
 }
 
 static void listCard(const char *dir) {
-  fs::File d = SD_MMC.open(dir);
+  fs::File d = CARD.open(dir);
   for (fs::File f = d ? d.openNextFile() : fs::File(); f; f = d.openNextFile()) {
     String path = String(dir) + (strcmp(dir, "/") ? "/" : "") + f.name();
     if (f.isDirectory()) {
@@ -225,15 +240,15 @@ void storageCardTest() {
     return;
   }
   static const char *TYPES[] = {"none", "MMC", "SD", "SDHC", "unknown"};
-  const uint8_t type = SD_MMC.cardType();
+  const uint8_t type = CARD.cardType();
   Serial.printf("OK S ok %s %llu MB, %llu MB used\n", TYPES[type < 4 ? type : 4],
-                SD_MMC.cardSize() / (1024 * 1024), SD_MMC.usedBytes() / (1024 * 1024));
+                CARD.cardSize() / (1024 * 1024), CARD.usedBytes() / (1024 * 1024));
   listCard("/");
   Serial.println("OK S end");
 }
 
 void storageCardUnmount() {
   if (!cardMounted) return;
-  SD_MMC.end();
+  CARD.end();
   cardMounted = false;
 }

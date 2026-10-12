@@ -4,6 +4,7 @@
 #include <Wire.h>
 #include <esp_sntp.h>
 #include <sys/time.h>
+#include "board.h"
 #include "net.h"
 #include "power.h"
 
@@ -26,18 +27,28 @@ static void start() {
   if (started) return;
   started = true;
   setTz(TZ_LONDON);
+#if !UNIDEX_X4
   Wire.begin(PIN_SDA, PIN_SCL);
+#endif
 }
 
+#if !UNIDEX_X4
 static void writeControl1(uint8_t value) {
   Wire.beginTransmission(PCF_ADDR);
   Wire.write(PCF_CONTROL1);
   Wire.write(value);
   Wire.endTransmission();
 }
+#endif
 
 static void writeChip(const struct tm &t);
 
+#if UNIDEX_X4
+// Xteink X4: no clock chip. The ESP32's own timer keeps the system time through deep sleep (a little less exactly
+// than the chip), but a power-off or flat battery loses it until the next sync (NTP or USB).
+void clockBegin() { start(); }
+static void writeChip(const struct tm &) {}
+#else
 void clockBegin() {
   start();
   Wire.beginTransmission(PCF_ADDR);
@@ -73,11 +84,13 @@ void clockBegin() {
   setTz(TZ_LONDON);
   settimeofday(&tv, nullptr);
 }
+#endif
 
 bool clockValid() {
   return time(nullptr) > 1704067200;  // 2024-01-01
 }
 
+#if !UNIDEX_X4
 // Datasheet order for an exact set: stop the clock, write the time (UTC), start it again (24-hour mode).
 static void writeChip(const struct tm &t) {
   writeControl1(CONTROL1_STOP);
@@ -93,6 +106,7 @@ static void writeChip(const struct tm &t) {
   Wire.endTransmission();
   writeControl1(0x00);
 }
+#endif
 
 // The current system time onto the chip.
 static void writeChipNow() {
@@ -135,6 +149,10 @@ void clockSet(time_t utc) {
 
 void clockStatus(char *out, size_t len) {
   start();
+#if UNIDEX_X4
+  snprintf(out, len, "no-chip sys=%ld", (long)time(nullptr));
+  return;
+#endif
   uint8_t r[11] = {};
   Wire.beginTransmission(PCF_ADDR);
   Wire.write(0x00);

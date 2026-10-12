@@ -1,12 +1,19 @@
 #include "battery.h"
 #include <Arduino.h>
 #include "battery_logic.h"
+#include "board.h"
 
+#if UNIDEX_X4
+static const int PIN_BATTERY = 0;  // ADC1 ch0, behind a divider by 2
+static const int PIN_USB = 20;     // HIGH while USB power is present
+static const float CALIBRATION = 1.0f;  // not yet measured on an X4
+#else
 static const int PIN_BATTERY = 4;  // ADC1 ch3, behind a divider by 2
 
 // Calibration: with a full battery and the charger finished, the raw reading was 4.08-4.09 V where the
 // cell really sits at about 4.17 V, so the ADC reads about 2% low through the 200k/200k divider.
 static const float CALIBRATION = 4170.0f / 4085.0f;
+#endif
 
 #if UNIDEX_DEV
 static int fakeMv;  // test build (X BATTMV <mv>): pretend the battery reads this (0 = the real reading)
@@ -65,6 +72,10 @@ bool batteryEmpty() { return battery::level(batteryMillivolts(), batteryCharging
 bool batteryCharging() {
 #if UNIDEX_DEV
   if (fakeMv) return fakeMv >= 4190;  // a pretend reading: as if on battery
+#endif
+#if UNIDEX_X4
+  pinMode(PIN_USB, INPUT);  // the X4 senses USB power itself, charger or computer
+  if (digitalRead(PIN_USB) == HIGH) return true;
 #endif
   return HWCDC::isPlugged() || batteryMillivolts() >= 4190;  // the charger holds 4.20 V while topping up
 }

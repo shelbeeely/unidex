@@ -12,6 +12,8 @@ git clone https://github.com/Forrest404/unidex.git && cd unidex
 pio run -t upload       # build and flash the firmware (keeps the settings saved on the board)
 ```
 
+For the Xteink X4: `pio run -e x4 -t upload`; see [X4.md](X4.md).
+
 If the upload can't connect: the USB port disappears while the board sleeps, so press a button and start the upload
 within 10 seconds. Still stuck: hold BOOT, tap RESET (or re-plug USB), release BOOT, try again.
 

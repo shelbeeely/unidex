@@ -6,6 +6,7 @@
 #include "phone_page.h"
 #include "phone_text.h"
 #include "store.h"
+#include "../../core/board.h"
 #include "../../core/devtools.h"
 #include "../../core/net.h"
 #include "../../core/power.h"
@@ -266,7 +267,7 @@ bool phoneStart() {
   snprintf(joinCode, sizeof joinCode, "WIFI:T:WPA;S:%s;P:%s;;", ssid, password);
   buildList();  // reads the card once, before the radio starts
   netOff();
-  setCpuFrequencyMhz(240);  // full speed while the radio is on (as for normal WiFi): phones join faster
+  setCpuFrequencyMhz(CPU_FAST_MHZ);  // full speed while the radio is on (as for normal WiFi): phones join faster
   WiFi.mode(WIFI_AP);
   if (!WiFi.softAP(ssid, password)) {
     WiFi.mode(WIFI_OFF);

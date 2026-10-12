@@ -5,6 +5,7 @@
 #include <esp_wifi.h>
 #include <freertos/queue.h>
 #include "net.h"
+#include "board.h"
 #include "power.h"
 #include "battery.h"
 
@@ -81,7 +82,7 @@ const char *linkStart() {
   if (!queue) queue = xQueueCreate(16, sizeof(LinkPacket));
   netClaim(true);
   powerHold();  // light sleep would turn the radio off
-  setCpuFrequencyMhz(240);
+  setCpuFrequencyMhz(CPU_FAST_MHZ);
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(false);  // modem sleep misses packets
   uint8_t mac[6];

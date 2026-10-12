@@ -1,14 +1,16 @@
 #include "display.h"
 #include <SPI.h>
+#include "board.h"
 #include "storage.h"
 
+#if !UNIDEX_X4
 static const int PIN_SCK = 12, PIN_MOSI = 13, PIN_CS = 11, PIN_DC = 10, PIN_RST = 9, PIN_BUSY = 8;
 static const int PIN_EPD_PWR = 6;  // panel power switch, active LOW
 // 10 MHz: each refresh sends the image two or three times, so a quicker link means less time awake (a screen
 // change 396 -> 378 ms, a game frame 138 -> 120 ms, measured). The panel is rated to 20 MHz; X FTEST tries others.
 static SPISettings spi(10000000, MSBFIRST, SPI_MODE0);
 
-void displaySetSpiHz(uint32_t hz) { spi = SPISettings(hz, MSBFIRST, SPI_MODE0); }
+#endif
 
 Display display;
 
@@ -21,6 +23,173 @@ void Display::drawPixel(int16_t x, int16_t y, uint16_t color) {
 }
 
 void Display::fillScreen(uint16_t color) { memset(buf, ink(color) == WHITE ? 0xFF : 0x00, sizeof buf); }
+
+#if UNIDEX_X4
+// ---- Xteink X4: a 4.26" 800x480 panel with an SSD1677 controller, used upright (480 across, 800 down, the
+// buttons below). The 200x200 screen is drawn at twice the size, each pixel a 2x2 block, in the middle of the
+// panel; around it stays paper. The image is scaled as it's sent, so no 48 KB panel buffer is kept in RAM.
+// The SD card shares the SPI bus (storage.cpp); every transfer here is one SPI transaction, so they take turns.
+
+static const int PIN_SCK = 8, PIN_MOSI = 10, PIN_MISO = 7, PIN_CS = 21, PIN_DC = 4, PIN_RST = 5, PIN_BUSY = 6;
+static const int PANEL_W = 800, PANEL_H = 480;  // the controller's rows (gate lines) are 800 pixels long
+static const int SCALE = 2;
+static const int LEFT = (PANEL_H - Display::WIDTH * SCALE) / 2;  // 40: the image's place on the upright screen
+static const int TOP = (PANEL_W - Display::HEIGHT * SCALE) / 2;  // 200 (a whole number of bytes along a row)
+static SPISettings spi(10000000, MSBFIRST, SPI_MODE0);
+
+void displaySetSpiHz(uint32_t hz) { spi = SPISettings(hz, MSBFIRST, SPI_MODE0); }
+
+static void send(uint8_t cmd, const uint8_t *data = nullptr, size_t len = 0) {
+  SPI.beginTransaction(spi);
+  digitalWrite(PIN_CS, LOW);
+  digitalWrite(PIN_DC, LOW);
+  SPI.transfer(cmd);
+  digitalWrite(PIN_DC, HIGH);
+  if (len) SPI.writeBytes(data, len);
+  digitalWrite(PIN_CS, HIGH);
+  SPI.endTransaction();
+}
+
+static void send(uint8_t cmd, std::initializer_list<uint8_t> data) { send(cmd, data.begin(), data.size()); }
+
+static void waitBusy(uint32_t timeoutMs) {
+  const uint32_t t0 = millis();
+  delay(1);  // BUSY goes high a moment after the command
+  while (digitalRead(PIN_BUSY) == HIGH && millis() - t0 < timeoutMs) delay(1);
+}
+
+static bool asleep = true;     // in deep sleep: needs a reset before anything else
+static bool powered = false;   // the analog side is on
+static bool needFull = true;   // RAM doesn't hold what's on screen (cold boot): the next refresh is full
+static const bool fastUsed = false;  // no custom game waveform on this panel: frames are ordinary partials
+static uint8_t fastFrames, fastRate;  // set by displayFrame(); unused here
+static uint32_t busyMs;
+
+// Reset and set the controller up (the X4's own values: booster, gate scan, border). A reset keeps the RAM, so the
+// last image is still there for a partial refresh to compare against.
+static void wake() {
+  if (!asleep) return;
+  digitalWrite(PIN_RST, LOW);
+  delay(10);
+  digitalWrite(PIN_RST, HIGH);
+  delay(10);
+  send(0x12);  // software reset
+  delay(10);
+  waitBusy(100);
+  send(0x18, {0x80});                                // the built-in temperature sensor picks the waveform
+  send(0x0C, {0xAE, 0xC7, 0xC3, 0xC0, 0x80});        // booster soft start
+  send(0x01, {(PANEL_H - 1) & 0xFF, (PANEL_H - 1) >> 8, 0x02});  // 480 gate lines, interlaced scan
+  send(0x3C, {0x80});                                // border
+  asleep = powered = false;
+}
+
+// One row as the controller takes it: 800 pixels, 1 = white. Row r is column 479 - r of the upright screen, so
+// along it runs one column of the 200x200 image, each pixel twice. `flip` sends the opposite (displayClean).
+static void panelRow(int r, uint8_t *out, bool flip) {
+  const uint8_t paper = display.inverted ? 0x00 : 0xFF;
+  const uint8_t x = flip ? 0xFF : 0x00;
+  memset(out, paper ^ x, PANEL_W / 8);
+  const int px = PANEL_H - 1 - r;
+  if (px < LEFT || px >= LEFT + Display::WIDTH * SCALE) return;
+  const int lx = (px - LEFT) / SCALE;
+  const uint8_t *col = display.buf + (lx >> 3);
+  const uint8_t bit = 0x80 >> (lx & 7);
+  uint8_t *o = out + TOP / 8;
+  for (int ly = 0; ly < Display::HEIGHT; ly += 4, o++) {  // 4 image pixels -> 8 panel pixels, one byte
+    uint8_t b = 0;
+    for (int i = 0; i < 4; i++)
+      if (col[(ly + i) * (Display::WIDTH / 8)] & bit) b |= 0xC0 >> (2 * i);
+    *o = b ^ x;
+  }
+}
+
+// The whole image into RAM 0x24 (new) or 0x26 (previous, which a partial refresh compares against). The rows go
+// in from the last RAM row to the first (the gates are wired in reverse), x counting up.
+static void writeRam(uint8_t ram, bool flip = false) {
+  send(0x11, {0x01});  // x up, y down
+  send(0x44, {0x00, 0x00, (PANEL_W - 1) & 0xFF, (PANEL_W - 1) >> 8});
+  send(0x45, {(PANEL_H - 1) & 0xFF, (PANEL_H - 1) >> 8, 0x00, 0x00});
+  send(0x4E, {0x00, 0x00});
+  send(0x4F, {(PANEL_H - 1) & 0xFF, (PANEL_H - 1) >> 8});
+  uint8_t row[PANEL_W / 8];
+  SPI.beginTransaction(spi);
+  digitalWrite(PIN_CS, LOW);
+  digitalWrite(PIN_DC, LOW);
+  SPI.transfer(ram);
+  digitalWrite(PIN_DC, HIGH);
+  for (int r = 0; r < PANEL_H; r++) {
+    panelRow(r, row, flip);
+    SPI.writeBytes(row, sizeof row);
+  }
+  digitalWrite(PIN_CS, HIGH);
+  SPI.endTransaction();
+}
+
+static bool driveAll;  // this partial refresh drives every pixel (displayClean)
+
+// The X4's own update sequences: 0xF7 full (load the temperature and waveform, show, analog off), 0xFC partial
+// (mode 2, the analog side left on).
+static void update(uint8_t ctrl1, uint8_t control, uint32_t timeoutMs) {
+  const uint32_t t0 = millis();
+  send(0x21, {ctrl1});  // 0x40: ignore RAM 0x26 (full), 0x00: compare with it (partial)
+  send(0x3C, {0xC0});
+  send(0x22, {control});
+  send(0x20);
+  waitBusy(timeoutMs);
+  busyMs = millis() - t0;
+  powered = !(control & 0x02);
+}
+
+static void refreshFull() {
+  wake();
+  writeRam(0x24);
+  writeRam(0x26);
+  update(0x40, 0xF7, 5000);
+  needFull = false;
+}
+
+static void refreshPartial() {
+  if (needFull) return refreshFull();
+  wake();
+  writeRam(0x24);
+  if (driveAll) writeRam(0x26, true);
+  update(0x00, 0xFC, 2000);
+  writeRam(0x26);  // the new image becomes the one the next partial compares against
+  writeRam(0x24);
+}
+
+// Deep sleep mode 1 keeps the RAM, so after the board wakes the next refresh can still be partial.
+static void sleepPanel() {
+  if (asleep) return;
+  if (powered) {
+    send(0x3C, {0x80});
+    send(0x22, {0x03});  // analog and clock off
+    send(0x20);
+    waitBusy(1000);
+    powered = false;
+  }
+  send(0x10, {0x01});
+  asleep = true;
+}
+
+static void leaveFastFrames() {}
+
+void displayInit(bool initial) {
+  pinMode(PIN_CS, OUTPUT);
+  digitalWrite(PIN_CS, HIGH);
+  pinMode(PIN_DC, OUTPUT);
+  digitalWrite(PIN_DC, HIGH);
+  pinMode(PIN_RST, OUTPUT);
+  digitalWrite(PIN_RST, HIGH);
+  pinMode(PIN_BUSY, INPUT);
+  SPI.begin(PIN_SCK, PIN_MISO, PIN_MOSI, -1);
+  asleep = true;
+  needFull = initial;
+  display.setTextWrap(false);  // with wrap on, measuring a long line reports only its first wrapped piece
+  display.inverted = storageGetInt("invert", 0);
+}
+#else
+void displaySetSpiHz(uint32_t hz) { spi = SPISettings(hz, MSBFIRST, SPI_MODE0); }
 
 // ---- The controller (SSD1681): commands over SPI, DC low for the command byte and high for its data. BUSY is
 // high while it works.
@@ -212,6 +381,8 @@ void displayInit(bool initial) {
   display.setTextWrap(false);  // with wrap on, measuring a long line reports only its first wrapped piece
   display.inverted = storageGetInt("invert", 0);
 }
+
+#endif  // !UNIDEX_X4
 
 void displaySetInverted(bool on) {
   display.inverted = on;

@@ -4,6 +4,7 @@
 #include <memory>
 #include <esp_wpa2.h>
 #include "credentials.h"
+#include "board.h"
 #include "power.h"
 #include "battery.h"
 #include "devtools.h"
@@ -23,7 +24,7 @@ const char *netBegin() {
   if (devFakeCloud() || begun || WiFi.status() == WL_CONNECTED) return nullptr;
   begun = true;
   beganAt = millis();
-  setCpuFrequencyMhz(240);  // full speed only while the radio is on (as in the Dex scan)
+  setCpuFrequencyMhz(CPU_FAST_MHZ);  // full speed only while the radio is on (as in the Dex scan)
   WiFi.mode(WIFI_STA);
   const String user = credGet("wifi_user");
   esp_wifi_sta_wpa2_ent_clear_ca_cert();

@@ -1,5 +1,5 @@
-# Checks every push and pull request: both firmwares build (the normal one and the test build) and every computer
-# test passes (tools/run_tests.sh). Nothing is published from here; the website comes from site.yml.
+# Checks every push and pull request: the firmwares build (normal and test builds, for the Waveshare board and the
+# Xteink X4) and every computer test passes (tools/run_tests.sh). Nothing is published from here; the website comes from site.yml.
 name: Checks
 
 on:
@@ -37,3 +37,6 @@ jobs:
 
       - name: Build the test firmware
         run: pio run -e dev
+
+      - name: Build the Xteink X4 firmware
+        run: pio run -e x4 -e x4-dev
