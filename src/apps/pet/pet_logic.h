@@ -18,17 +18,13 @@
 namespace pet {
 
 enum Layer { BODY, EYES_LAYER, MOUTH, HAT, EXTRA, HAIR, OUTFIT, LAYERS };
-// What the Pet holds (RoomiePet): a part like the layers', but not in the saved look (which is full): it's kept as
-// pet_held and goes with the pride flag wherever that goes. Drawn last. The Waveshare board has only "None".
-static const int HELD = LAYERS;
-static const char *const HELD_NAME = "Holding";
 static const char *const LAYER_NAMES[LAYERS] = {"Body", "Eyes", "Mouth", "Hat", UNIDEX_X4 ? "Accessory" : "Extra",
                                                  "Hair", "Outfit"};
 // Bits a layer takes in a saved look, and so the most parts a layer can have.
 static const uint8_t LAYER_BITS[LAYERS] = {UNIDEX_X4 ? 3 : 4, 4, 4, UNIDEX_X4 ? 5 : 4, UNIDEX_X4 ? 5 : 4,
                                            UNIDEX_X4 ? 5 : 4, UNIDEX_X4 ? 5 : 4};
 // The Waveshare build keeps the parts it shipped with: the RoomiePet ones are added after them.
-static const uint8_t WAVESHARE_PARTS[LAYERS + 1] = {6, 10, 9, 16, 16, 12, 12, 1};
+static const uint8_t WAVESHARE_PARTS[LAYERS] = {6, 10, 9, 16, 16, 12, 12};
 // The order layers are drawn in: clothes under the face, hair over the eyes (a fringe can cover one), hats over hair.
 static const Layer DRAW_ORDER[LAYERS] = {BODY, OUTFIT, EYES_LAYER, MOUTH, HAIR, HAT, EXTRA};
 static const int SIZE = 32;  // each part is SIZE x SIZE pixels
@@ -49,7 +45,6 @@ inline LayerParts partsOfAll(int layer) {
     case HAT: return {HATS, countOf(HATS)};
     case HAIR: return {HAIRS, countOf(HAIRS)};
     case OUTFIT: return {OUTFITS, countOf(OUTFITS)};
-    case HELD: return {HELD_PARTS, countOf(HELD_PARTS)};
     default: return {EXTRAS, countOf(EXTRAS)};
   }
 }
@@ -67,12 +62,12 @@ inline int shiftOf(int layer) {
 }
 
 struct Look {
-  uint8_t part[LAYERS + 1];  // the layers, then HELD
+  uint8_t part[LAYERS];
   bool pin;  // wears its pronoun pin (the X4 only: the top bit of a saved look)
 };
 
 // The look a new Pet starts with: the first body, eyes and mouth, no hat, blush, no hair, no outfit.
-static const Look DEFAULT_LOOK = {{0, 0, 0, 0, 1, 0, 0, 0}, false};
+static const Look DEFAULT_LOOK = {{0, 0, 0, 0, 1, 0, 0}, false};
 
 static const uint32_t PIN_BIT = 1u << 31;
 
@@ -86,7 +81,7 @@ inline uint32_t pack(const Look &l) {
 // A saved number back to a look. A part that doesn't exist (a damaged value, or a part removed in a later
 // version) falls back to the default for that layer.
 inline Look unpack(uint32_t v) {
-  Look l = DEFAULT_LOOK;  // HELD isn't in v: none
+  Look l;
   for (int i = 0; i < LAYERS; i++) {
     const uint8_t p = (v >> shiftOf(i)) & ((1u << LAYER_BITS[i]) - 1);
     l.part[i] = p < partsOf(i).count ? p : DEFAULT_LOOK.part[i];
@@ -121,8 +116,6 @@ static const Drop DROPS[] = {
   {EXTRA, 25, UNCOMMON, "Spider"},        {EXTRA, 29, UNCOMMON, "Rose"},       {EXTRA, 27, UNCOMMON, "Shades"},
   {OUTFIT, 22, UNCOMMON, "Suit"},         {OUTFIT, 13, RARE, "Maid dress"},    {OUTFIT, 21, RARE, "Lace dress"},
   {HAT, 23, LEGENDARY, "Tiara"},
-  {HELD, 10, UNCOMMON, "Sword"},          {HELD, 14, UNCOMMON, "Lantern"},     {HELD, 9, RARE, "Magic wand"},
-  {HELD, 11, LEGENDARY, "Gem"},
 #endif
 };
 static const int DROP_COUNT = sizeof DROPS / sizeof DROPS[0];
@@ -139,7 +132,7 @@ inline uint8_t rarityOf(int layer, int part) {
 
 // The gifts a Pet has: one bit per part, per layer (saved in NVS as pet_owned).
 struct Owned {
-  uint32_t layer[LAYERS + 1];  // the layers, then HELD
+  uint32_t layer[LAYERS];
 };
 inline bool owns(const Owned &o, int layer, int part) {
   return rarityOf(layer, part) == STARTER || (o.layer[layer] >> part & 1);
@@ -162,7 +155,7 @@ inline void stepOwned(Look &l, int layer, int step, const Owned &o) {
 
 // A look with any part not owned put back to the default (a look set over USB or the web app).
 inline Look onlyOwned(Look l, const Owned &o) {
-  for (int i = 0; i <= HELD; i++)
+  for (int i = 0; i < LAYERS; i++)
     if (!owns(o, i, l.part[i])) l.part[i] = DEFAULT_LOOK.part[i];
   return l;
 }
@@ -219,10 +212,10 @@ template <typename Rand> Look randomLook(Rand rand) {
   return l;
 }
 
-// A random look from what this Pet owns, what it holds too: one call of rand per layer.
+// A random look from what this Pet owns: one call of rand per layer.
 template <typename Rand> Look randomOwned(Rand rand, const Owned &o) {
   Look l = DEFAULT_LOOK;
-  for (int i = 0; i <= HELD; i++) {
+  for (int i = 0; i < LAYERS; i++) {
     const int n = partsOf(i).count;
     int choices = 0;
     for (int p = 0; p < n; p++) choices += owns(o, i, p);
@@ -239,9 +232,7 @@ template <typename Rand> Look randomOwned(Rand rand, const Owned &o) {
 // Draws the look, layer by layer: pixel(x, y, ink) for every pixel a layer sets ('#' ink, 'o' paper), with x
 // and y from 0 to SIZE - 1. eyesClosed draws EYES_CLOSED instead of the chosen eyes (a blink).
 template <typename Pixel> void drawLook(const Look &l, bool eyesClosed, Pixel pixel) {
-  for (int k = 0; k <= LAYERS; k++) {  // DRAW_ORDER, then what it holds
-    const int layer = k < LAYERS ? DRAW_ORDER[k] : HELD;
-    if (layer == HELD && (!l.part[HELD] || l.part[HELD] >= partsOf(HELD).count)) continue;
+  for (const Layer layer : DRAW_ORDER) {
     const PetPart &p = layer == EYES_LAYER && eyesClosed ? EYES_CLOSED : partsOf(layer).parts[l.part[layer]];
     for (int y = 0; y < SIZE; y++)
       for (int x = 0; x < SIZE; x++) {

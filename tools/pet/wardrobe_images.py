@@ -36,7 +36,7 @@ def flag(img, f, x0, y0, w, h, gw=52, gh=32):
             d.rectangle([x0 + gx * w / gw, y0 + gy * h / gh, x0 + (gx + 1) * w / gw - 1, y0 + (gy + 1) * h / gh - 1],
                         fill=flag_colour(f, gx, gy, gw, gh))
     d.rectangle([x0, y0, x0 + w - 1, y0 + h - 1], outline=INK, width=max(1, round(w / 40)))
-DEFAULT = [0, 0, 0, 0, 1, 0, 0, 0]  # the seven layers, then what it holds
+DEFAULT = [0, 0, 0, 0, 1, 0, 0]
 font_path = os.path.join(root, "tools/fonts/LiberationSans-Bold.ttf")
 font = lambda size: ImageFont.truetype(font_path, size)
 INK, PAPER, MUTED = (17, 17, 17), (255, 255, 255), (110, 110, 110)
@@ -94,8 +94,7 @@ img.save(os.path.join(root, "docs/roomiepet-pets.png"), optimize=True)
 
 # The wardrobe: every hair, outfit, hat, extra, eyes and mouth, each worn by the plain blob, gifts marked by rarity.
 rarity = {(g["layer"], g["part"]): g["rarity"] for g in DROPS}
-rows_of = [(6, "Outfits"), (5, "Hair"), (3, "Hats"), (4, "Accessories"), (7, "Things to hold"), (1, "Eyes"), (2, "Mouths"),
-           (0, "Bodies")]
+rows_of = [(6, "Outfits"), (5, "Hair"), (3, "Hats"), (4, "Accessories"), (1, "Eyes"), (2, "Mouths"), (0, "Bodies")]
 scale, pad, cell, name_h, head = 3, 12, 96, 40, 34
 cols = 16
 lines = lambda layer: -(-len(LAYERS[layer]["parts"]) // cols)

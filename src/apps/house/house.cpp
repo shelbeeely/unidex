@@ -275,7 +275,7 @@ static void drawList() {
                tag ? "$" : "", tag ? tag : "");
       if (r.origin == h.me && !tag) strlcpy(right, "you, no $cashtag", sizeof right);
     }
-    drawRow(i - top, i == cursor, left, right, screen == ROOMMATES ? (uint8_t)(r.d & 0xFF) : 0);
+    drawRow(i - top, i == cursor, left, right, screen == ROOMMATES ? (uint8_t)r.d : 0);
   }
   if (screen == CHORES_LIST && !today) drawToast("Set the clock (Settings or Sync)");
   const bool onRecord = cursor < rowCount;
@@ -666,8 +666,7 @@ static void drawSync() {
     if (h.id && heard[i].house != h.id) continue;
     const int16_t cx = 25 + shownPets * 50;
     const Record *m = member(h, heard[i].id);
-    petDraw(m ? m->a : petLookBits(), 1, cx - 16, CONTENT_TOP + 48, PetMood::Normal, nullptr, 0,
-            m ? (uint8_t)(m->d >> 8) : petHeld());
+    petDraw(m ? m->a : petLookBits(), 1, cx - 16, CONTENT_TOP + 48);
     display.setFont(FONT_TINY);
     const String n = fitText(heard[i].name, 48);
     display.setCursor(cx - textWidth(n.c_str()) / 2, CONTENT_TOP + 94);

@@ -5,8 +5,8 @@ import { drawPin, drawFlag, drawFlagInk, ON_PIN } from './x4/pin.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
-const DEFAULT = [0, 0, 0, 0, 1, 0, 0, 0];  // the seven layers, then what it holds
-const ROWS = [6, 5, 3, 4, 0, 1, 2, 7];  // as on the X4: clothes first, what it holds last
+const DEFAULT = [0, 0, 0, 0, 1, 0, 0];
+const ROWS = [6, 5, 3, 4, 0, 1, 2];  // as on the X4: clothes first
 const rarity = (layer, part) => (DROPS.find(d => d.layer === layer && d.part === part) || {}).rarity || 0;  // 0: a starter
 
 function draw(canvas, look, pronouns = '', pin = false, flag = 0) {
@@ -99,7 +99,7 @@ FLAGS.forEach((f, i) => {
 
 // ---- The wardrobe: every part on the plain blob, by layer.
 
-const ORDER = [[6, 'Outfits'], [5, 'Hair'], [3, 'Hats'], [4, 'Accessories'], [7, 'Things to hold'], [1, 'Eyes'], [2, 'Mouths'], [0, 'Bodies']];
+const ORDER = [[6, 'Outfits'], [5, 'Hair'], [3, 'Hats'], [4, 'Accessories'], [1, 'Eyes'], [2, 'Mouths'], [0, 'Bodies']];
 for (const [layer, title] of ORDER) {
   $('wardrobe').insertAdjacentHTML('beforeend', `<h3>${title} <span class="note">${LAYERS[layer].parts.length}</span></h3>`);
   const grid = document.createElement('div');

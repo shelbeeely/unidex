@@ -35,15 +35,15 @@ bool petUsb(const char *line) {
 #if UNIDEX_X4
     usbOut().print(' ');
     for (const char c : petPronouns()) usbOut().printf("%02x", (uint8_t)c);
-    usbOut().printf(" %02x %02x", petFlag(), petHeld());
+    usbOut().printf(" %02x", petFlag());
 #endif
     usbOut().print('\n');
   } else if (strncmp(cmd, "SET ", 4) == 0) {
     // "-" for no name (or no pronouns), so the pronouns after an empty name aren't taken for the name.
-    char lookHex[12] = "", nameHex[2 * MAX_NAME + 2] = "", pronounsHex[2 * pronouns::MAX + 2] = "", flagHex[4] = "", heldHex[4] = "";
+    char lookHex[12] = "", nameHex[2 * MAX_NAME + 2] = "", pronounsHex[2 * pronouns::MAX + 2] = "", flagHex[4] = "";
     String name, said;
     char *end;
-    const int n = sscanf(cmd + 4, "%11s %25s %25s %3s %3s", lookHex, nameHex, pronounsHex, flagHex, heldHex);
+    const int n = sscanf(cmd + 4, "%11s %25s %25s %3s", lookHex, nameHex, pronounsHex, flagHex);
     const unsigned long look = strtoul(lookHex, &end, 16);
     if (strcmp(nameHex, "-") == 0) nameHex[0] = 0;
     if (strcmp(pronounsHex, "-") == 0) pronounsHex[0] = 0;
@@ -68,10 +68,6 @@ bool petUsb(const char *line) {
       const unsigned long f = strtoul(flagHex, &end, 16);
       storagePutInt("pet_flag", *end || f > 255 || (f & 0x7F) >= (unsigned long)flags::COUNT ? 0 : f);
     }
-    if (n > 4) {  // what it holds; a gift not found yet (or nothing there) is nothing
-      const unsigned long hd = strtoul(heldHex, &end, 16);
-      storagePutInt("pet_held", !*end && hd < (unsigned long)pet::partsOf(pet::HELD).count && pet::owns(owned, pet::HELD, hd) ? hd : 0);
-    }
     houseUpdateMe();  // the household's member card takes the new name, look and pronouns
 #endif
     petChanged();
@@ -80,7 +76,7 @@ bool petUsb(const char *line) {
     // Every part, for the web app's dress-up: "PP <layer> <index> <rarity> <owned> <hex name>" (pet.h).
     pet::Owned owned;
     petOwned(owned.layer);
-    for (int layer = 0; layer < (UNIDEX_X4 ? pet::HELD + 1 : pet::LAYERS); layer++) {  // then what it can hold
+    for (int layer = 0; layer < pet::LAYERS; layer++) {
       const pet::LayerParts lp = pet::partsOf(layer);
       for (int i = 0; i < lp.count; i++) {
         usbOut().printf("PP %d %d %u %d ", layer, i, (unsigned)pet::rarityOf(layer, i), (int)pet::owns(owned, layer, i));

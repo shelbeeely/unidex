@@ -230,27 +230,6 @@ int main() {
   pinned.pin = true;
   check(unpack(pack(pinned)).pin == (bool)UNIDEX_X4 && !unpack(pack(DEFAULT_LOOK)).pin,
         UNIDEX_X4 ? "the pin is saved with the look (the top bit)" : "the Waveshare board has no pin");
-  // What it holds.
-  bool heldOk = partsOf(HELD).count == (UNIDEX_X4 ? 16 : 1) && blank(partsOf(HELD).parts[0]);
-  for (int i = 0; i < partsOf(HELD).count; i++) heldOk &= partOk(partsOf(HELD).parts[i]);
-  check(heldOk, UNIDEX_X4 ? "16 things to hold (the first is nothing), each a proper part" : "nothing to hold on the Waveshare board");
-  check(unpack(pack(DEFAULT_LOOK)).part[HELD] == 0, "what it holds isn't in the saved look");
-#if UNIDEX_X4
-  check(strcmp(HELD_PARTS[1].name, "Broom") == 0 && strcmp(HELD_PARTS[9].name, "Wand") == 0 &&
-            strcmp(HELD_PARTS[10].name, "Sword") == 0 && strcmp(HELD_PARTS[11].name, "Gem") == 0 &&
-            strcmp(HELD_PARTS[14].name, "Lantern") == 0 && rarityOf(HELD, 11) == LEGENDARY && rarityOf(HELD, 1) == STARTER,
-        "a broom to start with; the wand, sword, gem and lantern are gifts");
-  Look holding = DEFAULT_LOOK;
-  holding.part[HELD] = 1;
-  uint8_t bare[SIZE][SIZE], withBroom[SIZE][SIZE];
-  render(DEFAULT_LOOK, false, bare);
-  render(holding, false, withBroom);
-  check(memcmp(bare, withBroom, sizeof bare) != 0, "a held broom is drawn");
-  Look tooFar = DEFAULT_LOOK;
-  tooFar.part[HELD] = 11;  // the gem, a gift
-  check(onlyOwned(tooFar, none).part[HELD] == 0 && onlyOwned(tooFar, all).part[HELD] == 11, "a gift is held only once found");
-#endif
-
   // Pride flags.
   bool flagsOk = flags::COUNT <= 128 && flags::FLAGS[0].count == 0;
   for (int f = 1; f < flags::COUNT; f++)

@@ -300,7 +300,7 @@ const VIEWS = {
     return `<h2>Roommates</h2>
       ${S.members.map(m => {
         const link = m.id !== S.me && payLink(m, 0, S.me);
-        return `<div class="card"><div class="row"><canvas class="mini" data-look="${m.look}" data-pronouns="${esc(m.pronouns || '')}" data-flag-byte="${m.flag || 0}" data-held="${m.held || 0}" width="96" height="96"></canvas>
+        return `<div class="card"><div class="row"><canvas class="mini" data-look="${m.look}" data-pronouns="${esc(m.pronouns || '')}" data-flag-byte="${m.flag || 0}" width="96" height="96"></canvas>
           <div class="grow"><div class="title">${withPronouns(m.name, m.pronouns, m.flag)}${m.id === S.me ? ' · you' : ''}</div>
           <div class="sub">${m.tag ? '$' + esc(m.tag) : 'No $cashtag'} · ${m.balance > 0 ? 'owed ' + money(m.balance) : m.balance < 0 ? 'owes ' + money(-m.balance) : 'even'}</div></div>
           ${link ? `<a class="b cash" href="${esc(link.url)}">Cash App</a><button class="b" data-act="shareMember" data-id="${m.id}">Share</button>` : ''}</div></div>`;
@@ -352,13 +352,12 @@ const VIEWS = {
 // a strip of every piece in the layer you're on, the name, the pronouns, a pride flag, the pin (pronouns or flag), and
 // Wear it. Gifts not found yet (they drop after chores) are skipped, and shown locked in the strip.
 const LAYERS = ART.map(l => l.name);
-const ROWS = [6, 5, 3, 4, 0, 1, 2, 7];  // as on the X4: clothes first (Outfit, Hair, Hat, Accessory, Body, Eyes, Mouth),
-// then what it holds (layer 7: not in the saved look, sent apart)
+const ROWS = [6, 5, 3, 4, 0, 1, 2];  // as on the X4: clothes first (Outfit, Hair, Hat, Accessory, Body, Eyes, Mouth)
 const SHIFT = BITS.map((_, i) => BITS.slice(0, i).reduce((a, b) => a + b, 0));
 const PIN = 2 ** 31;  // the top bit of a saved look: it wears its pronoun pin
 const lookParts = hex => { const v = parseInt(hex || '0', 16) || 0; return BITS.map((b, i) => Math.floor(v / 2 ** SHIFT[i]) % 2 ** b); };
 const lookPin = hex => (parseInt(hex || '0', 16) || 0) >= PIN;
-const lookHex = (parts, pin) => (parts.slice(0, BITS.length).reduce((v, p, i) => v + p * 2 ** SHIFT[i], 0) + (pin ? PIN : 0)).toString(16).padStart(8, '0');
+const lookHex = (parts, pin) => (parts.reduce((v, p, i) => v + p * 2 ** SHIFT[i], 0) + (pin ? PIN : 0)).toString(16).padStart(8, '0');
 const RARITY = ['starter', 'uncommon', 'rare', 'legendary'];
 const partInfo = (layer, index) => info.parts.find(x => x.layer === layer && x.index === index);
 const owned = (layer, index) => { const p = partInfo(layer, index); return !p || p.owned; };
@@ -367,7 +366,7 @@ const offered = layer => ART[layer].parts.map((_, i) => i).filter(i => owned(lay
 // the X4 wears; Load puts that back.
 const design = { parts: null, pin: false, name: '', pronouns: '', flag: 0, strip: 6 };  // flag: the flag byte
 function loadDesign() {
-  design.parts = [...lookParts(info.pet.look), info.pet.held || 0].map((p, i) => (p < ART[i].parts.length ? p : 0));
+  design.parts = lookParts(info.pet.look).map((p, i) => (p < ART[i].parts.length ? p : 0));
   design.pin = lookPin(info.pet.look);
   design.name = info.pet.name || '';
   design.pronouns = info.pet.pronouns || '';
@@ -447,7 +446,7 @@ function paintPets() {
   });
   document.querySelectorAll('canvas[data-look]').forEach(t => {
     const hex = (+t.dataset.look >>> 0).toString(16);
-    drawPet(t, [...lookParts(hex), +t.dataset.held || 0], lookPin(hex), t.dataset.pronouns || '', +t.dataset.flagByte || 0);
+    drawPet(t, lookParts(hex), lookPin(hex), t.dataset.pronouns || '', +t.dataset.flagByte || 0);
   });
   document.querySelectorAll('canvas[data-flag]').forEach(t => drawFlag(t.getContext('2d'), +t.dataset.flag, 0, 0, t.width, t.height));
 }
@@ -486,8 +485,7 @@ const PET_ACTIONS = {
     const name = design.name.replace(/[^\x20-\x7e]/g, '').trim().slice(0, 12), pr = cleanPronouns(design.pronouns);
     const hex = t => (t ? toHex(enc.encode(t)) : '-');
     const flag = (flagIndex(design.flag) ? design.flag : 0).toString(16).padStart(2, '0');
-    const held = (design.parts[7] || 0).toString(16).padStart(2, '0');
-    ok(await run(`P SET ${lookHex(design.parts, design.pin)} ${hex(name)} ${hex(pr)} ${flag} ${held}`), 'OK P SET');
+    ok(await run(`P SET ${lookHex(design.parts, design.pin)} ${hex(name)} ${hex(pr)} ${flag}`), 'OK P SET');
     await readExtras();
     await readHouse();  // its member card (name, look, pronouns), as roommates will see it
     loadDesign();
@@ -667,8 +665,7 @@ async function readExtras() {
   const g = reply(r, 'OK G ');
   info.settings = Object.fromEntries((g ? g.slice(5) : '').split(' ').map(kv => kv.split('=')));
   const p = (reply(r, 'OK P ') || 'OK P 0 ').split(' ');
-  info.pet = { look: p[2], name: fromHex(p[3] || ''), pronouns: fromHex(p[4] || ''), flag: parseInt(p[5] || '0', 16) || 0,
-    held: parseInt(p[6] || '0', 16) || 0 };
+  info.pet = { look: p[2], name: fromHex(p[3] || ''), pronouns: fromHex(p[4] || ''), flag: parseInt(p[5] || '0', 16) || 0 };
   info.badges = r.filter(l => l.startsWith('F ')).map(l => l.slice(2));
   info.timetable = r.filter(l => l.startsWith('WL ')).map(l => l.slice(3).split(',').slice(0, 5));
 }

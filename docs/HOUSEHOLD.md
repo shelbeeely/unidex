@@ -71,8 +71,7 @@ A Pet's look has seven layers: Body, Eyes, Mouth, Hat, Accessory, **Hair** and *
 120 parts. It's drawn in this order: the body, its outfit, the face, the hair (a fringe can cover an eye), then hats
 and accessories, then the pronoun pin.
 
-- **On the X4:** Pet, B. The rows go Outfit, Hair, Hat, Accessory, Body, Eyes, Mouth, **Holding** (B: next, hold B:
-  previous),
+- **On the X4:** Pet, B. The rows go Outfit, Hair, Hat, Accessory, Body, Eyes, Mouth (B: next, hold B: previous),
   then **Pronouns**, **Flag** (your pride flag), **Pin** (B: off, then pronouns, then flag), Name, Random look and
   Done.
 - **In the web app:** the **Pet** tab is the Pet designer: a live preview, a row a layer with ◀ and ▶, a strip of
@@ -85,10 +84,6 @@ The parts:
 - **Hair (18):** Fluffy bob, Long, Buzz cut, Mohawk, Undercut, Emo fringe, Pigtails, Split dye, Space buns, Waves, Wolf cut, Soft curls, Bangs, Liberty, Side swoop, Ringlets, Slick back, Ponytail
 - **Hats (23):** Bow, Beanie, Crown, Flower, Headphones, Cap, Wizard hat*, Chef hat*, Cat ears, Horns*, Halo*, Witch hat*, Veil*, Wreath*, Bucket hat, Maid band, Clips, Bandana, Scene bow, Top hat, Sweatband, Sun hat, Tiara*
 - **Accessories (30):** Blush, Scarf, Bow tie, Star, Apron*, Duster*, Medal*, Choker, Studs, Pearls*, Chain, Bat wings*, Hearts, Ankh, Bandaid, Hair bow, Heart clip, Star clips, Spikes, Safety pin, Nose ring, Wristband, Tear, Cross, Spider*, Dog tags, Shades*, Earrings, Rose*, Carrot
-- **Things to hold (15):** Broom, Mop, Spray, Sponge, Plunger, Laundry, Bin bag, Water can, Wand*, Sword*, Gem*,
-  Cupcake, Hammer, Lantern*, Shield. Chore tools for the chore game, and a few treasures; held in the Pet's hand,
-  drawn over everything else. (The idea of things to hold comes from
-  [pixel-avatar-lib](https://github.com/snjyor/pixel-avatar-lib); RoomiePet's are drawn from scratch.)
 - **Eyes:** Dots, Sparkly, Happy, Sleepy, Wink, Glasses, Eyeliner, Lashes, Hearts, Smudged. **Mouths:** Smile, Open, Cat, Tongue, Small o, Fangs, Lip ring, Lipstick, Smirk. **Bodies:** Blob, Cat, Bear, Bunny, Frog, Robot
 
 \* a gift (below). Everything else is a starter every Pet has, so nobody has to earn being themselves.

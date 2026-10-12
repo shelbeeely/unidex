@@ -22,7 +22,7 @@ static const int16_t EDIT_AVATAR_Y = CONTENT_TOP + 4, ROW_Y = HINTS_TOP - 14;
 enum : int8_t { PRONOUNS_ROW = -1, NAME_ROW = -2, RANDOM_ROW = -3, DONE_ROW = -4, PIN_ROW = -5, FLAG_ROW = -6 };
 #if UNIDEX_X4
 static const int8_t ROW_OF[] = {pet::OUTFIT, pet::HAIR,  pet::HAT,    pet::EXTRA, pet::BODY,  pet::EYES_LAYER,
-                                pet::MOUTH,  pet::HELD,   PRONOUNS_ROW, FLAG_ROW, PIN_ROW, NAME_ROW, RANDOM_ROW, DONE_ROW};
+                                pet::MOUTH,  PRONOUNS_ROW, FLAG_ROW, PIN_ROW, NAME_ROW, RANDOM_ROW, DONE_ROW};
 #else
 static const int8_t ROW_OF[] = {pet::BODY, pet::EYES_LAYER, pet::MOUTH, pet::HAT,  pet::EXTRA,
                                 pet::HAIR, pet::OUTFIT,     NAME_ROW,   RANDOM_ROW, DONE_ROW};
@@ -31,8 +31,7 @@ static const int ROWS = sizeof ROW_OF;
 
 enum Screen : uint8_t { MAIN, EDIT, MEET, NAME };
 RTC_DATA_ATTR static uint8_t screen, row;
-RTC_DATA_ATTR static uint32_t draft;      // the look being edited (kept through sleep)
-RTC_DATA_ATTR static uint8_t draftHeld;   // and what it holds (pet_logic.h's HELD: not in the saved look)
+RTC_DATA_ATTR static uint32_t draft;  // the look being edited (kept through sleep)
 RTC_DATA_ATTR static char places[pet::MAX_NAME + 1];  // the name being edited, a letter a place (pet_logic.h)
 RTC_DATA_ATTR static uint8_t place;                    // the place being chosen
 static bool blinking, happy;
@@ -63,7 +62,7 @@ static pet::Owned owned() {
   return o;
 }
 
-void petOwned(uint32_t out[8]) {
+void petOwned(uint32_t out[7]) {
   const pet::Owned o = owned();
   memcpy(out, o.layer, sizeof o.layer);
 }
@@ -104,11 +103,6 @@ String petName() { return storageGetString("pet_name"); }
 
 String petPronouns() { return UNIDEX_X4 ? storageGetString("pet_pronouns") : String(); }
 
-uint8_t petHeld() {
-  const int h = UNIDEX_X4 ? storageGetInt("pet_held", 0) : 0;
-  return h > 0 && h < pet::partsOf(pet::HELD).count ? h : 0;
-}
-
 uint8_t petFlag() { return UNIDEX_X4 ? (uint8_t)storageGetInt("pet_flag", 0) : 0; }
 
 void petDrawFlag(uint8_t flag, int16_t x, int16_t y, int16_t w, int16_t h) {
@@ -134,10 +128,8 @@ static uint32_t changes;  // counts saves from the website; the screen and the h
 
 void petChanged() { changes++; }
 
-void petDraw(uint32_t look, int scale, int16_t x0, int16_t y0, PetMood mood, const char *pronouns, uint8_t flag,
-             uint8_t held) {
+void petDraw(uint32_t look, int scale, int16_t x0, int16_t y0, PetMood mood, const char *pronouns, uint8_t flag) {
   pet::Look l = pet::unpack(look);
-  l.part[pet::HELD] = held < pet::partsOf(pet::HELD).count ? held : 0;
   if (mood == PetMood::Happy) l.part[pet::EYES_LAYER] = pet::HAPPY_EYES;
   pet::drawLook(l, mood == PetMood::Blink, [&](int x, int y, bool ink) {
     display.fillRect(x0 + x * scale, y0 + y * scale, scale, scale, ink ? BLACK : WHITE);
@@ -191,10 +183,7 @@ static void drawAvatar(const pet::Look &look, int scale, int16_t y0, bool eyesCl
   if (look.pin) drawPin(petPronouns().c_str(), petFlag(), scale, x0, y0);
 }
 
-static void save() {  // each skips the write if unchanged
-  storagePutInt("pet_look", pet::pack(pet::unpack(draft)));
-  storagePutInt("pet_held", draftHeld);
-}
+static void save() { storagePutInt("pet_look", pet::pack(pet::unpack(draft))); }  // skips the write if unchanged
 
 
 // What the Pet says about the household, if anything: a roommate's news first (it cheers them on), then its own
@@ -221,7 +210,6 @@ static void drawMain() {
   display.setFont(FONT_SMALL);
   petDrawFlag(flag, display.width() - MARGIN - textWidth(shown.c_str()) - 18, 7, 14, 9);  // before the name
   pet::Look look = pet::unpack(petLookBits());
-  look.part[pet::HELD] = petHeld();
   char say[64];
   HouseFeeling feeling = HouseFeeling::Normal;
   const bool talking = householdSay(say, sizeof say, feeling);
@@ -273,7 +261,6 @@ static Redraw onButton(Event e) {
     }
     if (e != Event::BShort) return Redraw::None;
     draft = petLookBits();
-    draftHeld = petHeld();
     row = 0;
     screen = EDIT;
     return Redraw::Full;  // the avatar changes size: a full refresh leaves no ghost
@@ -296,7 +283,6 @@ static Redraw onButton(Event e) {
     return Redraw::Partial;
   }
   pet::Look look = pet::unpack(draft);
-  look.part[pet::HELD] = draftHeld;
   const int kind = ROW_OF[row];
   if (e == Event::BShort && kind == NAME_ROW) {
     pet::placesFromName(petName().c_str(), places);
@@ -345,7 +331,6 @@ static Redraw onButton(Event e) {
     return Redraw::None;
   }
   draft = pet::pack(look);
-  draftHeld = look.part[pet::HELD];
   return Redraw::Partial;
 }
 
@@ -368,8 +353,7 @@ static Redraw onBack() {
 }
 
 static void drawEdit() {
-  pet::Look look = pet::unpack(draft);
-  look.part[pet::HELD] = draftHeld;
+  const pet::Look look = pet::unpack(draft);
   char gifts[24];  // gifts found so far (the rest are skipped)
   snprintf(gifts, sizeof gifts, "%d/%d gifts", pet::giftsOwned(owned()), pet::DROP_COUNT);
   drawHeader("Dress up", gifts);
@@ -393,7 +377,7 @@ static void drawEdit() {
         of++;
         if (i <= look.part[kind]) at = of;
       }
-    display.print(kind == pet::HELD ? pet::HELD_NAME : pet::LAYER_NAMES[kind]);
+    display.print(pet::LAYER_NAMES[kind]);
     snprintf(right, sizeof right, "%s  %d/%d", lp.parts[look.part[kind]].name, at, of);
     drawRight(right, ROW_Y);
     drawHints("next", "change", "previous");
@@ -497,7 +481,7 @@ static Redraw tick() {
   static uint32_t seen;
   if (seen != changes) {  // a new look or name from the website
     seen = changes;
-    if (screen == EDIT) draft = petLookBits(), draftHeld = petHeld();
+    if (screen == EDIT) draft = petLookBits();
     return Redraw::Partial;
   }
   if (screen == MEET) return meetTick();
