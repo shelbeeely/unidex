@@ -6,6 +6,8 @@
 // WebAssembly. Every change re-reads the household from the X4 first, makes the change as the X4 itself would, and
 // sends back only the records that changed, which the X4 merges as at a Sync.
 
+import { LAYERS as ART, DRAW_ORDER } from './pet-art.js';
+
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
 const money = p => (p < 0 ? '-$' : '$') + (Math.abs(p) / 100).toFixed(2);
@@ -343,22 +345,51 @@ const VIEWS = {
   },
 };
 
-// ---- Dress-up: one choice per layer; parts not earned yet (EXP from chores) are shown locked.
-const LAYERS = ['Body', 'Eyes', 'Mouth', 'Hat', 'Extra'];
-const BUNNY_LAD = { Body: 'Bunny', Hat: 'Cap', Extra: 'Bow tie' };
-const lookParts = look => LAYERS.map((_, i) => (parseInt(look || '0', 16) >> (4 * i)) & 15);
-const lookHex = parts => parts.reduce((v, p, i) => v | (p << (4 * i)), 0).toString(16).padStart(5, '0');
+// ---- Dress-up: one choice per layer, a preview drawn from the same art as the X4 (pet-art.js, generated from the
+// firmware's parts), and whole styles in one tap. Parts not earned yet (EXP from chores) are shown locked.
+const LAYERS = ART.map(l => l.name);
+const lookParts = look => LAYERS.map((_, i) => (parseInt(look || '0', 16) >>> (4 * i)) & 15);
+const lookHex = parts => (parts.reduce((v, p, i) => v + (p & 15) * 16 ** i, 0)).toString(16).padStart(7, '0');
+const earned = (layer, index) => { const p = info.parts.find(x => x.layer === layer && x.index === index); return !p || p.exp <= info.exp; };
+
+function drawPet(canvas, parts) {
+  const ctx = canvas.getContext('2d'), s = canvas.width / 32;
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  for (const layer of DRAW_ORDER) {
+    const part = ART[layer].parts[parts[layer]] || ART[layer].parts[0];
+    part.rows.forEach((row, y) => [...row].forEach((c, x) => {
+      if (c === '.') return;
+      ctx.fillStyle = c === '#' ? '#111' : '#fff';
+      ctx.fillRect(x * s, y * s, s, s);
+    }));
+  }
+}
+
+// A style on top of `parts`: its pieces not earned yet stay as they are (as on the X4).
+const withStyle = (parts, style) => parts.map((p, i) => (style.parts[i] >= 0 && earned(i, style.parts[i]) ? style.parts[i] : p));
 
 function dressUp() {
   const exp = info.exp, parts = lookParts(info.pet.look), level = 1 + Math.floor(exp / 50);
   const next = info.parts.filter(p => p.exp > exp).sort((a, b) => a.exp - b.exp)[0];
   return `<div class="card"><div class="row"><div class="title">Dress up</div><span class="sub">Level ${level} · ${exp} EXP</span></div>
     <p class="note">Chores earn EXP: 10 each, 15 on time.${next ? ` Next: ${esc(next.name)} at ${next.exp} EXP.` : ' Everything earned!'}</p>
+    <div class="row" style="align-items:flex-start"><canvas id="petPreview" class="prev" width="192" height="192" style="width:160px;height:160px"></canvas>
+    <div class="grow"><div class="sub" style="margin-bottom:6px">Styles</div>${info.styles.map((st, i) =>
+      `<button class="b" data-act="style" data-i="${i}" style="margin:0 6px 6px 0">${esc(st.name)}</button>`).join('')}</div></div>
     <form class="add" data-form="look">${LAYERS.map((name, layer) => `<label>${name}<select name="l${layer}">${info.parts
       .filter(p => p.layer === layer).map(p => `<option value="${p.index}"${p.index === parts[layer] ? ' selected' : ''}${p.exp > exp ? ' disabled' : ''}>${esc(p.name)}${p.exp > exp ? ' (' + p.exp + ' EXP)' : ''}</option>`).join('')}</select></label>`).join('')}
-      <button class="b p">Wear it</button></form>
-    <button class="b" data-act="bunnyLad">Bunny lad</button> <span class="sub">Bunny, cap and bow tie</span></div>`;
+      <button class="b p">Wear it</button></form></div>`;
 }
+
+// The parts chosen in the form right now, and the preview kept up with them.
+const formParts = f => LAYERS.map((_, i) => +f['l' + i].value);
+function refreshPreview() {
+  const f = document.querySelector('form[data-form=look]'), c = $('petPreview');
+  if (f && c) drawPet(c, formParts(f));
+}
+document.addEventListener('change', e => { if (e.target.closest('form[data-form=look]')) refreshPreview(); });
+new MutationObserver(refreshPreview).observe(document.body, { childList: true, subtree: true });
 
 async function setLook(parts) {
   ok(await run(`P SET ${lookHex(parts)} ${toHex(enc.encode(info.pet.name || ''))}`), 'OK P SET');
@@ -451,13 +482,12 @@ const ACTIONS = {
     ok(await run('W ' + lines.length + ' ' + c, ...lines), 'OK W');
     toast('Timetable saved');
   },
-  bunnyLad: () => {
-    const parts = lookParts(info.pet.look);
-    for (const [layer, name] of Object.entries(BUNNY_LAD)) {
-      const p = info.parts.find(x => x.layer === LAYERS.indexOf(layer) && x.name === name);
-      if (p) parts[p.layer] = p.index;
-    }
-    return setLook(parts);
+  style: d => {  // put the style in the form (and the preview); "Wear it" sends it
+    const f = document.querySelector('form[data-form=look]');
+    withStyle(formParts(f), info.styles[+d.i]).forEach((p, i) => (f['l' + i].value = p));
+    refreshPreview();
+    const missing = info.styles[+d.i].parts.filter((p, i) => p >= 0 && !earned(i, p)).length;
+    toast(missing ? `${info.styles[+d.i].name}: ${missing} piece${missing > 1 ? 's' : ''} still to earn` : `${info.styles[+d.i].name}: press Wear it`);
   },
   setTime: async () => { ok(await run('T ' + Math.floor(Date.now() / 1000)), 'OK T'); await readExtras(); render(); toast('Clock set'); },
 };
@@ -495,7 +525,7 @@ const FORMS = {
     ok(await run(`P SET ${info.pet.look} ${toHex(enc.encode(name))}`), 'OK P SET');
     await readExtras(); render(); toast('Saved');
   },
-  look: f => setLook(LAYERS.map((_, i) => +f['l' + i].value)),
+  look: f => setLook(formParts(f)),
   settings: async f => {
     ok(await run('G SET sleep ' + f.sleep.value, 'G SET invert ' + f.invert.value));
     await readExtras(); render(); toast('Saved');
@@ -547,6 +577,10 @@ async function readExtras() {
     return { layer: +layer, index: +index, exp: +exp, name: fromHex(name) };
   });
   info.exp = +((reply(r, 'OK P PARTS ') || '').split(' ')[3] || 0);
+  info.styles = r.filter(l => l.startsWith('PS ')).map(l => {
+    const [, , name, parts] = l.split(' ');
+    return { name: fromHex(name), parts: parts.split(',').map(Number) };
+  });
   const g = reply(r, 'OK G ');
   info.settings = Object.fromEntries((g ? g.slice(5) : '').split(' ').map(kv => kv.split('=')));
   const p = (reply(r, 'OK P ') || 'OK P 0 ').split(' ');

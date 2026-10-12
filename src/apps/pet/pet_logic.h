@@ -1,6 +1,8 @@
 #pragma once
 // Pet's look: one part per layer, saved as one number (4 bits a layer), and drawn from the 32x32 parts in
 // parts.h. No Arduino code, so it can be checked on a computer (tools/pettest).
+// Hair and Outfit (RoomiePet) came later: they take the next 8 bits, so a look saved before them (or sent by a
+// device or website that doesn't know them) simply has none, and devices that don't know them ignore them.
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
@@ -8,8 +10,10 @@
 
 namespace pet {
 
-enum Layer { BODY, EYES_LAYER, MOUTH, HAT, EXTRA, LAYERS };
-static const char *const LAYER_NAMES[LAYERS] = {"Body", "Eyes", "Mouth", "Hat", "Extra"};
+enum Layer { BODY, EYES_LAYER, MOUTH, HAT, EXTRA, HAIR, OUTFIT, LAYERS };
+static const char *const LAYER_NAMES[LAYERS] = {"Body", "Eyes", "Mouth", "Hat", "Extra", "Hair", "Outfit"};
+// The order layers are drawn in: clothes under the face, hair over the eyes (a fringe can cover one), hats over hair.
+static const Layer DRAW_ORDER[LAYERS] = {BODY, OUTFIT, EYES_LAYER, MOUTH, HAIR, HAT, EXTRA};
 static const int SIZE = 32;  // each part is SIZE x SIZE pixels
 static const int HAPPY_EYES = 2;  // EYES[2], "Happy": shown while it hops
 
@@ -26,6 +30,8 @@ inline LayerParts partsOf(int layer) {
     case EYES_LAYER: return {EYES, countOf(EYES)};
     case MOUTH: return {MOUTHS, countOf(MOUTHS)};
     case HAT: return {HATS, countOf(HATS)};
+    case HAIR: return {HAIRS, countOf(HAIRS)};
+    case OUTFIT: return {OUTFITS, countOf(OUTFITS)};
     default: return {EXTRAS, countOf(EXTRAS)};
   }
 }
@@ -34,8 +40,8 @@ struct Look {
   uint8_t part[LAYERS];
 };
 
-// The look a new Pet starts with: the first body, eyes and mouth, no hat, blush.
-static const Look DEFAULT_LOOK = {{0, 0, 0, 0, 1}};
+// The look a new Pet starts with: the first body, eyes and mouth, no hat, blush, no hair, no outfit.
+static const Look DEFAULT_LOOK = {{0, 0, 0, 0, 1, 0, 0}};
 
 inline uint32_t pack(const Look &l) {
   uint32_t v = 0;
@@ -68,9 +74,13 @@ struct Unlock {
   uint16_t exp;
   const char *what;  // for "Unlocked: ..." (the part's name and layer)
 };
+// Every style's everyday pieces are free, so nobody has to earn being themselves; the showy ones are goals.
 static const Unlock UNLOCKS[] = {
-  {EXTRA, 5, 30, "Apron"},       {HAT, 7, 60, "Wizard hat"}, {EXTRA, 6, 100, "Feather duster"},
-  {HAT, 8, 150, "Chef hat"},     {EXTRA, 7, 250, "Medal"},
+  {EXTRA, 5, 30, "Apron"},         {HAT, 10, 40, "Devil horns"},   {HAT, 11, 40, "Halo"},
+  {HAT, 7, 60, "Wizard hat"},      {EXTRA, 10, 60, "Pearls"},      {OUTFIT, 7, 70, "Leather jacket"},
+  {EXTRA, 12, 80, "Bat wings"},    {HAT, 14, 90, "Flower crown"},  {EXTRA, 6, 100, "Feather duster"},
+  {OUTFIT, 6, 110, "Corset"},      {HAT, 12, 120, "Witch hat"},    {HAT, 13, 140, "Veil"},
+  {HAT, 8, 150, "Chef hat"},       {EXTRA, 7, 250, "Medal"},
 };
 static const int UNLOCK_COUNT = sizeof UNLOCKS / sizeof UNLOCKS[0];
 
@@ -116,6 +126,30 @@ inline const Unlock *nextUnlock(uint32_t exp) {
 // Level from EXP: 1 at the start, then one every 50.
 inline int levelOf(uint32_t exp) { return 1 + exp / 50; }
 
+// ---- Styles: whole outfits in one go (dress-up's Style row, the web app). One part per layer, -1 = keep what's
+// worn. Parts not earned yet are left as they are, so a style fills in as its pieces unlock.
+struct Style {
+  const char *name;
+  int8_t part[LAYERS];  // BODY, EYES, MOUTH, HAT, EXTRA, HAIR, OUTFIT
+};
+static const Style STYLES[] = {
+  {"Femboy", {-1, 7, 0, 9, 8, 1, 1}},       // lashes, cat ears, bell choker, fluffy bob, pleated skirt
+  {"E-girl", {-1, 6, 5, 0, 13, 8, 5}},      // eyeliner, fangs, cheek hearts, split dye, striped top
+  {"Alternative", {-1, 0, 6, 0, 9, 4, 4}},  // lip ring, studded collar, mohawk, band tee
+  {"Emo", {-1, 9, 4, 0, 11, 6, 2}},         // smudged eyes, chain, emo fringe, hoodie
+  {"Goth", {-1, 6, 7, 13, 14, 2, 6}},       // eyeliner, dark lips, veil, ankh, long hair, corset
+  {"Masc", {-1, 0, 8, 15, 11, 3, 7}},       // smirk, bucket hat, chain, buzz cut, leather jacket
+  {"Femme", {-1, 7, 7, 14, 10, 10, 9}},     // lashes, lipstick, flower crown, pearls, waves, sundress
+  {"Bunny lad", {3, -1, -1, 6, 3, -1, -1}}, // bunny, backwards cap, bow tie
+};
+static const int STYLE_COUNT = sizeof STYLES / sizeof STYLES[0];
+
+inline Look applyStyle(Look l, const Style &s, uint32_t exp) {
+  for (int i = 0; i < LAYERS; i++)
+    if (s.part[i] >= 0 && s.part[i] < partsOf(i).count && unlocked(i, s.part[i], exp)) l.part[i] = s.part[i];
+  return l;
+}
+
 // A random look from any random number source (one call per layer).
 template <typename Rand> Look randomLook(Rand rand) {
   Look l;
@@ -126,7 +160,7 @@ template <typename Rand> Look randomLook(Rand rand) {
 // Draws the look, layer by layer: pixel(x, y, ink) for every pixel a layer sets ('#' ink, 'o' paper), with x
 // and y from 0 to SIZE - 1. eyesClosed draws EYES_CLOSED instead of the chosen eyes (a blink).
 template <typename Pixel> void drawLook(const Look &l, bool eyesClosed, Pixel pixel) {
-  for (int layer = 0; layer < LAYERS; layer++) {
+  for (const Layer layer : DRAW_ORDER) {
     const PetPart &p = layer == EYES_LAYER && eyesClosed ? EYES_CLOSED : partsOf(layer).parts[l.part[layer]];
     for (int y = 0; y < SIZE; y++)
       for (int x = 0; x < SIZE; x++) {

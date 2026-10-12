@@ -29,7 +29,7 @@ bool petUsb(const char *line) {
   if (strncmp(line, "P ", 2) != 0) return false;
   const char *cmd = line + 2;
   if (strcmp(cmd, "GET") == 0) {
-    usbOut().printf("OK P %05lx ", (unsigned long)petLookBits());
+    usbOut().printf("OK P %07lx ", (unsigned long)petLookBits());  // 7 layers (the website's designer reads 5)
     for (const char c : petName()) usbOut().printf("%02x", (uint8_t)c);
     usbOut().print('\n');
   } else if (strncmp(cmd, "SET ", 4) == 0) {
@@ -58,6 +58,13 @@ bool petUsb(const char *line) {
         for (const char *c = lp.parts[i].name; *c; c++) usbOut().printf("%02x", (uint8_t)*c);
         usbOut().print('\n');
       }
+    }
+    // The styles: "PS <index> <hex name> <part per layer, -1 keep, comma-separated>".
+    for (int i = 0; i < pet::STYLE_COUNT; i++) {
+      usbOut().printf("PS %d ", i);
+      for (const char *c = pet::STYLES[i].name; *c; c++) usbOut().printf("%02x", (uint8_t)*c);
+      for (int l = 0; l < pet::LAYERS; l++) usbOut().printf("%c%d", l ? ',' : ' ', pet::STYLES[i].part[l]);
+      usbOut().print('\n');
     }
     usbOut().printf("OK P PARTS %lu\n", (unsigned long)petExp());
   } else {

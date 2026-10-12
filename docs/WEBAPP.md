@@ -25,7 +25,8 @@ change in the app:
    a roommate's at Sync.
 
 So the app and the X4 can't disagree about whose turn a chore is or who owes whom, and the app's rules can't drift
-from the device's. Badge pictures are converted to 1-bit e-ink BMPs in the same module (contrast stretch and
+from the device's. The Pet's art comes from `site/x4/pet-art.js`, generated from the firmware's parts by `tools/pet/export.py`, so the
+preview matches the X4 exactly. Badge pictures are converted to 1-bit e-ink BMPs in the same module (contrast stretch and
 Floyd-Steinberg dithering, as the website's badge maker). That's where WebAssembly earns its keep: the household is
 small, so the win there is one shared set of rules rather than speed; image conversion is the heavy lifting.
 
@@ -43,7 +44,7 @@ when you leave the X4's hotspot.
 |---|---|
 | `H DUMP`, `H PUT <hex>`, `H SAVE`, `H START`, `H LEAVE` | The household (`src/apps/house/usb.h`) |
 | `G`, `G SET sleep <s>`, `G SET invert <0/1>` | Settings |
-| `P GET`, `P SET <look> <name hex>`, `P PARTS` | The Pet's name and look; every part with the EXP it needs, and the Pet's EXP |
+| `P GET`, `P SET <look> <name hex>`, `P PARTS` | The Pet's name and look (7 hex digits, one per layer); every part with the EXP it needs, the styles, and the Pet's EXP |
 | `T <unix>` | Set the clock from the phone or computer |
 | `L`, `B ...` + `D ...`, `BX <name>` | List, upload and delete badges |
 | `W GET`, `W <count> <crc32>` + lines | Read and replace the timetable |

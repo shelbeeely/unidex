@@ -125,7 +125,8 @@ int main() {
   Look s0 = DEFAULT_LOOK;
   s0.part[HAT] = 6;  // Cap
   stepUnlocked(s0, HAT, 1, 0);
-  check(s0.part[HAT] == 0, "stepping on from the Cap with no EXP skips the locked hats, back to None");
+  check(s0.part[HAT] == 9 && strcmp(HATS[9].name, "Cat ears") == 0,
+        "stepping on from the Cap with no EXP skips the locked hats, to the cat ears");
   s0.part[HAT] = 6;
   stepUnlocked(s0, HAT, 1, 60);
   check(s0.part[HAT] == 7, "with 60 EXP the wizard hat comes next");
@@ -134,9 +135,28 @@ int main() {
   const Look kept = onlyUnlocked(worn, 0);
   check(kept.part[HAT] == DEFAULT_LOOK.part[HAT] && kept.part[EXTRA] == DEFAULT_LOOK.part[EXTRA] && kept.part[BODY] == 3,
         "a look with parts not earned keeps only what is");
-  check(newlyUnlocked(20, 35) && strcmp(newlyUnlocked(20, 35)->what, "Apron") == 0 && !newlyUnlocked(35, 40),
+  check(newlyUnlocked(20, 35) && strcmp(newlyUnlocked(20, 35)->what, "Apron") == 0 && !newlyUnlocked(35, 39),
         "crossing 30 EXP unlocks the apron, once");
   check(nextUnlock(0)->exp == 30 && nextUnlock(250) == nullptr, "the next thing to earn");
+  // Styles and the new layers.
+  bool stylesOk = true;
+  for (const Style &st : STYLES)
+    for (int i = 0; i < LAYERS; i++) stylesOk &= st.part[i] < partsOf(i).count;
+  check(stylesOk, "every style's parts exist");
+  const Look femboy = applyStyle(DEFAULT_LOOK, STYLES[0], 0);
+  check(strcmp(HAIRS[femboy.part[HAIR]].name, "Fluffy bob") == 0 && strcmp(OUTFITS[femboy.part[OUTFIT]].name, "Skirt") == 0 &&
+            strcmp(HATS[femboy.part[HAT]].name, "Cat ears") == 0,
+        "the femboy style: fluffy bob, skirt, cat ears (all free)");
+  const Look goth = applyStyle(DEFAULT_LOOK, STYLES[4], 0);
+  check(goth.part[OUTFIT] == DEFAULT_LOOK.part[OUTFIT] && strcmp(HAIRS[goth.part[HAIR]].name, "Long") == 0,
+        "the goth style without EXP: long hair now, the corset once it's earned");
+  check(applyStyle(DEFAULT_LOOK, STYLES[4], 1000).part[OUTFIT] == 6, "and with the EXP, the corset");
+  Look old = DEFAULT_LOOK;
+  old.part[HAIR] = 5, old.part[OUTFIT] = 9;
+  check(unpack(pack(old) & 0xFFFFF).part[HAIR] == 0 && unpack(pack(old)).part[OUTFIT] == 9,
+        "a look from before hair and outfits (5 layers) has none; a full one keeps them");
+  check(DRAW_ORDER[1] == OUTFIT && DRAW_ORDER[4] == HAIR && DRAW_ORDER[5] == HAT, "clothes under the face, hair under hats");
+
   check(levelOf(0) == 1 && levelOf(49) == 1 && levelOf(50) == 2, "levels every 50 EXP");
 
   printf(failures ? "\n%d check(s) failed\n" : "\nall checks passed\n", failures);

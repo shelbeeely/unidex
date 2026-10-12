@@ -16,14 +16,17 @@
 
 static const int MAIN_SCALE = 4, EDIT_SCALE = 3;  // 128 px on the main screen, 96 px while editing
 static const int16_t EDIT_AVATAR_Y = CONTENT_TOP + 4, ROW_Y = HINTS_TOP - 14;
-static const int NAME_ROW = pet::LAYERS, RANDOM_ROW = pet::LAYERS + 1, DONE_ROW = pet::LAYERS + 2;
-static const int ROWS = pet::LAYERS + 3;
+// The editor's rows: one per layer, then Style (whole outfits, pet_logic.h's STYLES), Name, Random and Done.
+static const int STYLE_ROW = pet::LAYERS, NAME_ROW = pet::LAYERS + 1, RANDOM_ROW = pet::LAYERS + 2,
+                 DONE_ROW = pet::LAYERS + 3;
+static const int ROWS = pet::LAYERS + 4;
 
 enum Screen : uint8_t { MAIN, EDIT, MEET, NAME };
 RTC_DATA_ATTR static uint8_t screen, row;
 RTC_DATA_ATTR static uint32_t draft;  // the look being edited (kept through sleep)
 RTC_DATA_ATTR static char places[pet::MAX_NAME + 1];  // the name being edited, a letter a place (pet_logic.h)
 RTC_DATA_ATTR static uint8_t place;                    // the place being chosen
+RTC_DATA_ATTR static int8_t styleShown = -1;           // the style last put on in the editor (-1: none yet)
 static bool blinking, happy;
 static uint8_t heart;  // the heart beside it while it's happy: 0 none, else its scale (it pops: 1, then 2)
 static uint32_t nextBlinkAt, openAt, lastPressAt;
@@ -220,6 +223,10 @@ static Redraw onButton(Event e) {
     save();
     screen = MAIN;
     return Redraw::Full;
+  } else if ((e == Event::BShort || e == Event::BLong) && row == STYLE_ROW) {
+    // The next (or previous) style; its pieces not earned yet stay as they are.
+    styleShown = ((styleShown + (e == Event::BShort ? 1 : -1)) % pet::STYLE_COUNT + pet::STYLE_COUNT) % pet::STYLE_COUNT;
+    look = pet::applyStyle(look, pet::STYLES[styleShown], petExp());
   } else if (e == Event::BShort && row == RANDOM_ROW) {
     if (devSeed()) srand(devSeed() + draft);
     look = pet::onlyUnlocked(pet::randomLook(randomNumber), petExp());
@@ -270,6 +277,11 @@ static void drawEdit() {
     snprintf(right, sizeof right, "%s  %d/%d", lp.parts[look.part[row]].name, look.part[row] + 1, lp.count);
     drawRight(right, ROW_Y);
     drawHints("next", "change", "previous");
+  } else if (row == STYLE_ROW) {
+    display.setCursor(MARGIN, ROW_Y);
+    display.print("Style");
+    drawRight(styleShown >= 0 ? pet::STYLES[styleShown].name : "pick one", ROW_Y);
+    drawHints("next", "next style", "previous");
   } else if (row == NAME_ROW) {
     display.setCursor(MARGIN, ROW_Y);
     display.print("Name");
@@ -343,8 +355,8 @@ static const char *detail() {
     snprintf(buf, sizeof buf, "name:%d:%s", place, name);
     return buf;
   }
-  if (screen == EDIT) snprintf(buf, sizeof buf, "edit:%d:%05lx", row, (unsigned long)pet::pack(pet::unpack(draft)));
-  else snprintf(buf, sizeof buf, "main:%05lx", (unsigned long)pet::pack(pet::unpack(petLookBits())));
+  if (screen == EDIT) snprintf(buf, sizeof buf, "edit:%d:%07lx", row, (unsigned long)pet::pack(pet::unpack(draft)));
+  else snprintf(buf, sizeof buf, "main:%07lx", (unsigned long)pet::pack(pet::unpack(petLookBits())));
   return buf;
 }
 #endif

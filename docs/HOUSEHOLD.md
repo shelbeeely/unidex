@@ -65,25 +65,66 @@ device.
   home screen meanwhile.
 - On a reminder's day it says so ("Bin day today!").
 
-## Earning cosmetics
+## Dress-up, styles and earning cosmetics
 
-Every chore your Pet does earns it EXP: 10, or 15 when it's done by its due day (marked done on the X4 or in the web
-app). Each 50 EXP is a level (on the Pet screen's header). EXP unlocks dress-up parts:
+A Pet's look has seven layers: Body, Eyes, Mouth, Hat, Extra, **Hair** and **Outfit**. It's drawn in this order:
+the body, its outfit, the face, the hair (a fringe can cover an eye), then hats and extras. Dress it up on the X4
+(Pet, B) or in the web app (Settings), which shows a live preview.
 
-| Part | EXP |
+**Styles** put on a whole look in one go. On the X4 it's the **Style** row in dress-up (B: next, hold B: previous);
+in the web app, a button each. A style leaves anything it doesn't name as it is, and any piece not earned yet stays
+as it was until it is.
+
+| Style | What it puts on |
 |---|---|
-| Apron | 30 |
-| Wizard hat | 60 |
-| Feather duster | 100 |
-| Chef hat | 150 |
-| Medal | 250 |
+| Femboy | Lashes, cat ears, bell choker, fluffy bob, pleated skirt |
+| E-girl | Winged eyeliner, fangs, cheek hearts, split dye, striped top |
+| Alternative | Lip ring, studded collar, mohawk, band tee |
+| Emo | Smudged eyes, small "o" mouth, chain, emo fringe, hoodie |
+| Goth | Winged eyeliner, dark lips, lace veil*, ankh, long black hair, corset* |
+| Masc | Smirk, bucket hat, chain, buzz cut, leather jacket* |
+| Femme | Lashes, lipstick, flower wreath*, pearls*, long waves, sundress |
+| Bunny lad | The Bunny body, backwards cap, bow tie |
 
-Everything else is free from the start, including the **bunny lad**: the Bunny body, the backwards **Cap** (its ears
-poke through) and the Bow tie. Parts not earned yet are skipped in dress-up (Pet, B), and refused if set over USB or
-from the web app. When one unlocks, the Pet says so ("Unlocked: Wizard hat! Dress me up"). The web app's Settings has
-the same dress-up, with locked parts greyed out and a **Bunny lad** button that puts the outfit on in one go.
+\* earned (below). Everything else in every style is free, so nobody has to earn being themselves.
 
-EXP is kept on each X4 (it's that Pet's own); it isn't shared with the household yet.
+All the parts:
+
+- **Hair:** Fluffy bob, Long, Buzz cut, Mohawk, Undercut, Emo fringe, Pigtails, Split dye, Space buns, Waves, Wolf cut
+- **Outfits:** Skirt (pleated), Hoodie, Sweater, Band tee, Stripes, Corset, Leather (jacket), Flannel, Sundress,
+  Overalls, Tutu
+- **Eyes** (new): Eyeliner, Lashes, Hearts, Smudged. **Mouths** (new): Fangs, Lip ring, Lipstick, Smirk
+- **Hats** (new): Cap, Cat ears, Horns, Halo, Witch hat, Veil, Wreath, Bucket hat (and Wizard and Chef hats)
+- **Extras** (new): Choker (with a bell), Studs, Pearls, Chain, Bat wings, Hearts, Ankh, Bandaid (and Apron, Duster,
+  Medal)
+
+### Earning
+
+Every chore your Pet does earns it EXP: 10, or 15 when it's done by its due day (on the X4 or in the web app). Each
+50 EXP is a level (on the Pet screen's header). These parts unlock with EXP; the Pet says when one does ("Unlocked:
+Halo! Dress me up"):
+
+| EXP | Unlocks |
+|---|---|
+| 30 | Apron |
+| 40 | Devil horns, Halo |
+| 60 | Wizard hat, Pearls |
+| 70 | Leather jacket |
+| 80 | Bat wings |
+| 90 | Flower wreath |
+| 100 | Feather duster |
+| 110 | Corset |
+| 120 | Witch hat |
+| 140 | Lace veil |
+| 150 | Chef hat |
+| 250 | Medal |
+
+Parts not earned yet are skipped in dress-up and refused if set over USB or from the web app. EXP is kept on each X4
+(it's that Pet's own); it isn't shared with the household yet. Roommates do see each other's looks, outfits and all,
+at Sync and when the Pets meet.
+
+The website's Tools page designer still shows the first five layers only: saving a look from it takes off the hair
+and outfit (put them back on the X4 or in its web app).
 
 ## The time
 

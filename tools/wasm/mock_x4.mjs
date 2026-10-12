@@ -10,16 +10,17 @@ const PORT = +(process.argv[2] || 8044), ROOT = 'site/x4';
 const PIP = 100, BISCUIT = 200;
 const house = { id: 77, me: PIP, clock: 2, nextSeq: 1, records: new Map() };
 const settings = { sleep: 10, invert: 0, time: 0 };
-let pet = { look: '10000', name: 'Pip' }, badges = ['hello.bmp'], timetable = ['Mon,09:00,10:00,Maths,B12'];
+let pet = { look: '0010000', name: 'Pip' }, badges = ['hello.bmp'], timetable = ['Mon,09:00,10:00,Maths,B12'];
 let upload = null, body = null, exp = 0;
 // The Pet's parts and what they cost, read from the firmware's own files.
 const partsSrc = readFileSync('src/apps/pet/parts.h', 'utf8'), logicSrc = readFileSync('src/apps/pet/pet_logic.h', 'utf8');
-const PARTS = ['BODIES', 'EYES', 'MOUTHS', 'HATS', 'EXTRAS'].map(sec => {
+const PARTS = ['BODIES', 'EYES', 'MOUTHS', 'HATS', 'EXTRAS', 'HAIRS', 'OUTFITS'].map(sec => {
   const start = partsSrc.indexOf(`PetPart ${sec}[]`), end = partsSrc.indexOf('\n};', start);
   return [...partsSrc.slice(start, end).matchAll(/\{"([^"]+)", \{/g)].map(m => m[1]);
 });
-const LAYER = { BODY: 0, EYES_LAYER: 1, MOUTH: 2, HAT: 3, EXTRA: 4 };
-const UNLOCKS = [...logicSrc.matchAll(/\{(BODY|EYES_LAYER|MOUTH|HAT|EXTRA), (\d+), (\d+), "/g)].map(m => ({ layer: LAYER[m[1]], part: +m[2], exp: +m[3] }));
+const LAYER = { BODY: 0, EYES_LAYER: 1, MOUTH: 2, HAT: 3, EXTRA: 4, HAIR: 5, OUTFIT: 6 };
+const STYLES = [...logicSrc.matchAll(/\{"([^"]+)", \{([-\d, ]+)\}\}/g)].map(m => ({ name: m[1], parts: m[2].replace(/ /g, '') }));
+const UNLOCKS = [...logicSrc.matchAll(/\{(BODY|EYES_LAYER|MOUTH|HAT|EXTRA|HAIR|OUTFIT), (\d+), (\d+), "/g)].map(m => ({ layer: LAYER[m[1]], part: +m[2], exp: +m[3] }));
 const need = (layer, part) => (UNLOCKS.find(u => u.layer === layer && u.part === part) || { exp: 0 }).exp;
 
 function memberHex(seq, origin, ver, text) {
@@ -69,6 +70,7 @@ function handle(line, out) {
   if (line === 'P GET') return out.push(`OK P ${pet.look} ${Buffer.from(pet.name).toString('hex')}`);
   if (line === 'P PARTS') {
     PARTS.forEach((names, layer) => names.forEach((n, i) => out.push(`PP ${layer} ${i} ${need(layer, i)} ${Buffer.from(n).toString('hex')}`)));
+    STYLES.forEach((st, i) => out.push(`PS ${i} ${Buffer.from(st.name).toString('hex')} ${st.parts}`));
     return out.push('OK P PARTS ' + exp);
   }
   if (line.startsWith('P SET ')) { const [, , look, name] = line.split(' '); pet = { look, name: Buffer.from(name || '', 'hex').toString() }; return out.push('OK P SET'); }
