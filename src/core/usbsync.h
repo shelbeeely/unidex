@@ -9,3 +9,11 @@ uint32_t usbSyncGeneration();     // goes up whenever /events.csv changes
 time_t usbSyncLastTime();         // last complete sync, 0 if none since power-up
 #include <stddef.h>
 bool usbSyncTakeNewBadge(char *out, size_t len);  // a badge just arrived over USB (reported once)
+
+#include <Print.h>
+#include <WString.h>
+// Where command replies go: the USB serial port, or a web request's answer while usbRun() is running one.
+Print &usbOut();
+// Runs command lines (separated by '\n') exactly as if they came over USB and returns what they printed: the web
+// app's /api on the X4's hotspot (core/hotspot.h) uses the same commands as the website over USB.
+String usbRun(const char *lines);

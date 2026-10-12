@@ -4,6 +4,7 @@
 #include <nvs_flash.h>
 #include "board.h"
 #include "devtools.h"
+#include "usbsync.h"
 
 #if UNIDEX_X4
 // Xteink X4: the FreeInk SDK's SD card manager (SdFat on the panel's SPI bus, CS 12), as an fs::FS (sdkcard.cpp).
@@ -236,23 +237,23 @@ static void listCard(const char *dir) {
   for (fs::File f = d ? d.openNextFile() : fs::File(); f; f = d.openNextFile()) {
     String path = String(dir) + (strcmp(dir, "/") ? "/" : "") + f.name();
     if (f.isDirectory()) {
-      Serial.printf("D %s\n", path.c_str());
+      usbOut().printf("D %s\n", path.c_str());
       if (strcmp(dir, "/") == 0) listCard(path.c_str());  // one level down is enough (badges/)
     } else {
-      Serial.printf("F %s %u\n", path.c_str(), (unsigned)f.size());
+      usbOut().printf("F %s %u\n", path.c_str(), (unsigned)f.size());
     }
   }
 }
 
 void storageCardTest() {
   if (!storageCardMount()) {
-    Serial.println("OK S none (no card, or not FAT32)");
+    usbOut().println("OK S none (no card, or not FAT32)");
     return;
   }
-  Serial.printf("OK S ok %s %llu MB, %llu MB used\n", cardKind(), cardTotal() / (1024 * 1024),
+  usbOut().printf("OK S ok %s %llu MB, %llu MB used\n", cardKind(), cardTotal() / (1024 * 1024),
                 cardUsed() / (1024 * 1024));
   listCard("/");
-  Serial.println("OK S end");
+  usbOut().println("OK S end");
 }
 
 void storageCardUnmount() {

@@ -1,3 +1,4 @@
+#include "../../core/usbsync.h"
 #include "usb.h"
 #include <Arduino.h>
 #include <esp_rom_crc.h>
@@ -28,7 +29,7 @@ static bool fromHex(const char *hex, String &out) {
 }
 
 static void printHex(const String &s) {
-  for (size_t i = 0; i < s.length(); i++) Serial.printf("%02x", (uint8_t)s[i]);
+  for (size_t i = 0; i < s.length(); i++) usbOut().printf("%02x", (uint8_t)s[i]);
 }
 
 // A note id from the page: digits, letters and dashes only, so it can't reach outside /notes.
@@ -49,29 +50,29 @@ static void status() {
   struct Prefixed : Print {
     bool start = true;
     size_t write(uint8_t c) override {
-      if (start) Serial.print("NS ");
+      if (start) usbOut().print("NS ");
       start = c == '\n';
-      return Serial.write(c);
+      return usbOut().write(c);
     }
   } out;
   credStatus(out);
   int notes = 0;
   const bool card = storeReady();
   const int waiting = card ? waitingNotes(notes) : 0;
-  Serial.printf("NC %d %d %d\nOK N ?\n", card, notes, waiting);
+  usbOut().printf("NC %d %d %d\nOK N ?\n", card, notes, waiting);
 }
 
 // The website's one-click sync: sends waiting notes in the background, as B on the Notes screen does.
 static void startSync() {
   int notes = 0;
-  if (jobBusy()) Serial.println("OK N SYNC busy");
-  else if (!storeReady()) Serial.println("OK N SYNC fail no SD card");
-  else if (!credHas("wifi_ssid")) Serial.println("OK N SYNC fail WiFi not set up");
+  if (jobBusy()) usbOut().println("OK N SYNC busy");
+  else if (!storeReady()) usbOut().println("OK N SYNC fail no SD card");
+  else if (!credHas("wifi_ssid")) usbOut().println("OK N SYNC fail WiFi not set up");
   else if (const int waiting = waitingNotes(notes)) {
-    if (jobStartSweep()) Serial.printf("OK N SYNC started %d\n", waiting);
-    else Serial.println("OK N SYNC busy");
+    if (jobStartSweep()) usbOut().printf("OK N SYNC started %d\n", waiting);
+    else usbOut().println("OK N SYNC busy");
   } else {
-    Serial.println("OK N SYNC none");
+    usbOut().println("OK N SYNC none");
   }
 }
 
@@ -79,7 +80,7 @@ static void startSync() {
 static void micTest(bool radio) {
   if (radio && !jobBusy()) netBegin();
   if (!audioBegin()) {
-    Serial.println("OK N MIC fail codec not answering");
+    usbOut().println("OK N MIC fail codec not answering");
     return;
   }
   static int16_t buf[512];
@@ -99,36 +100,36 @@ static void micTest(bool radio) {
   audioEnd();
   if (radio && !jobBusy()) netOff();
   powerActivity();
-  if (!total) Serial.println("OK N MIC fail no samples");
-  else Serial.printf("OK N MIC %d %d\n", peak, (int)sqrt(sum / total));
+  if (!total) usbOut().println("OK N MIC fail no samples");
+  else usbOut().printf("OK N MIC %d %d\n", peak, (int)sqrt(sum / total));
 }
 
 static void list() {
   for (const NoteInfo &n : storeList()) {
-    Serial.printf("NF %s %u %d %d ", n.id.c_str(), (unsigned)storeReadNote(n.id).length(), n.text, n.pushed);
+    usbOut().printf("NF %s %u %d %d ", n.id.c_str(), (unsigned)storeReadNote(n.id).length(), n.text, n.pushed);
     printHex(n.title);
-    Serial.println();
+    usbOut().println();
   }
-  Serial.println("OK N LIST");
+  usbOut().println("OK N LIST");
 }
 
 static void read(const String &id) {
   if (!storeValidId(id)) {
-    Serial.println("ERR");
+    usbOut().println("ERR");
     return;
   }
   const String md = storeReadNote(id);
   if (!md.length()) {
-    Serial.println("ERR");
+    usbOut().println("ERR");
     return;
   }
   for (size_t i = 0; i < md.length(); i += 64) {
-    Serial.print("ND ");
+    usbOut().print("ND ");
     printHex(md.substring(i, i + 64));
-    Serial.println();
+    usbOut().println();
   }
   const uint32_t crc = esp_rom_crc32_le(0, (const uint8_t *)md.c_str(), md.length());
-  Serial.printf("OK N READ %u %lu\n", (unsigned)md.length(), (unsigned long)crc);
+  usbOut().printf("OK N READ %u %lu\n", (unsigned)md.length(), (unsigned long)crc);
 }
 
 static String caChunks;  // N ADD wifi_ca chunks waiting for the final N SET wifi_ca
@@ -147,32 +148,32 @@ bool notesUsb(const char *l) {
     if (strcmp(arg, "wifi_ca") == 0) value = caChunks + value;  // the CA is saved once, with its last chunk
     caChunks = "";
     if (parsed && credSet(arg, value))
-      Serial.printf("OK N SET %s\n", arg);
+      usbOut().printf("OK N SET %s\n", arg);
     else
-      Serial.println("ERR");
+      usbOut().println("ERR");
   } else if (strcmp(cmd, "ADD") == 0) {  // a wifi_ca chunk, kept in RAM until N SET wifi_ca
     String value;
     const char *hex = n == 2 ? strchr(l + 6, ' ') : nullptr;
     if (n == 2 && strcmp(arg, "wifi_ca") == 0 && hex && fromHex(hex + 1, value) &&
         caChunks.length() + value.length() <= 3000) {
       caChunks += value;
-      Serial.printf("OK N ADD %s\n", arg);
+      usbOut().printf("OK N ADD %s\n", arg);
     } else {
       caChunks = "";
-      Serial.println("ERR");
+      usbOut().println("ERR");
     }
   } else if (strcmp(cmd, "CLR") == 0) {
     if (jobBusy()) {  // the note being sent still needs its keys
-      Serial.println("ERR busy");
+      usbOut().println("ERR busy");
       return true;
     }
     if (strcmp(arg, "all") == 0) credClearAll();
     else if (credKnown(arg)) credClear(arg);
-    Serial.println("OK N CLR");
+    usbOut().println("OK N CLR");
   } else if (strcmp(cmd, "TEST") == 0) {
     const char *err = cloudTest(arg);
-    if (err) Serial.printf("OK N TEST %s fail %s\n", arg, err);
-    else Serial.printf("OK N TEST %s ok\n", arg);
+    if (err) usbOut().printf("OK N TEST %s fail %s\n", arg, err);
+    else usbOut().printf("OK N TEST %s ok\n", arg);
     powerActivity();
   } else if (strcmp(cmd, "MIC") == 0) {
     micTest(strcmp(arg, "wifi") == 0);
@@ -182,20 +183,20 @@ bool notesUsb(const char *l) {
     read(arg);
   } else if (strcmp(cmd, "DEL") == 0) {
     if (jobBusy() && strcmp(arg, jobStatus().noteId) == 0) {
-      Serial.println("ERR busy");
+      usbOut().println("ERR busy");
       return true;
     }
     if (storeValidId(arg)) storeDelete(arg);
-    Serial.println("OK N DEL");
+    usbOut().println("OK N DEL");
   } else if (strcmp(cmd, "SYNC") == 0) {
     startSync();
   } else if (strcmp(cmd, "JOB") == 0) {
     const JobStatus js = jobStatus();
-    Serial.printf("OK N JOB %d %d %lu ", jobBusy(), (int)js.step, (unsigned long)js.gen);
+    usbOut().printf("OK N JOB %d %d %lu ", jobBusy(), (int)js.step, (unsigned long)js.gen);
     printHex(String(js.result));
-    Serial.print(' ');
+    usbOut().print(' ');
     printHex(String(js.noteId));
-    Serial.printf(" %u\n", (unsigned)jobStackLeft());
+    usbOut().printf(" %u\n", (unsigned)jobStackLeft());
   } else {
     return false;
   }
