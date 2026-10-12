@@ -18,6 +18,8 @@
 #include "../../core/storage.h"
 #include "../../core/theme.h"
 #include "../pet/pet.h"
+#include "phone.h"
+#include "../../core/hotspot.h"
 
 using namespace house;
 
@@ -48,8 +50,13 @@ static const char *const WEEKDAYS[] = {"Sundays", "Mondays", "Tuesdays", "Wednes
 #define COUNT(a) (int)(sizeof(a) / sizeof((a)[0]))
 
 enum Screen : uint8_t { NO_HOUSE, MENU, CHORES_LIST, SHOPPING, MONEY, REMINDER_LIST, MESSAGE_LIST, ROOMMATES,
-                        PICK, AMOUNT, CONFIRM, SYNC, PAY, CASHTAG };
+                        PICK, AMOUNT, CONFIRM, SYNC, PAY, CASHTAG, PHONE };
+#if UNIDEX_X4
+// The X4 adds "Pay by phone": the household's Cash App links on a phone, over the X4's own hotspot (house/phone.cpp).
+enum MenuRow : uint8_t { M_CHORES, M_SHOPPING, M_MONEY, M_REMINDERS, M_MESSAGES, M_ROOMMATES, M_PHONE, M_SYNC, M_ROWS };
+#else
 enum MenuRow : uint8_t { M_CHORES, M_SHOPPING, M_MONEY, M_REMINDERS, M_MESSAGES, M_ROOMMATES, M_SYNC, M_ROWS };
+#endif
 // What the picker is choosing.
 enum Pick : uint8_t { P_CHORE, P_EVERY, P_ITEM, P_SPENT, P_REMINDER, P_WHEN, P_MESSAGE };
 enum Ask : uint8_t { A_DELETE, A_SETTLE, A_CLEAR_BOUGHT, A_LEAVE, A_REMOVE_MEMBER };
@@ -224,6 +231,9 @@ static void drawMenu() {
       }
     }
     static const char *const NAMES[] = {"Chores", "Shopping", "Money", "Reminders", "Pet messages", "Roommates",
+#if UNIDEX_X4
+                                        "Pay by phone",
+#endif
                                         "Sync with roommates"};
     drawRow(i - top, i == cursor, NAMES[i], right);
   }
@@ -301,41 +311,48 @@ static void drawMoney() {
     drawCentered("Everyone is even", CONTENT_TOP + 3 + 2 * ROW_H + ROW_H / 2);
   }
   const bool onDebt = cursor < nd && (m[d[cursor].from]->origin == h.me || m[d[cursor].to]->origin == h.me);
-  drawHints("next", cursor == nd ? "add" : onDebt ? (payTagOf(h, m[d[cursor].to]->origin) ? "pay" : "settled") : "",
+  const bool payable = onDebt && (payTagOf(h, m[d[cursor].to]->origin) ||
+                                  activeRequest(h, m[d[cursor].to]->origin, m[d[cursor].from]->origin));
+  drawHints("next", cursor == nd ? "add" : onDebt ? (payable ? "pay" : "settled") : "",
             "");
 }
 
-// A $cashtag's Cash App link as a QR code (version 3: 29 modules, 3 px each, about 1 cm on the X4), the $cashtag and
-// the amount under it.
+// A QR code (version 3: 29 modules, 3 px each, about 1 cm on the X4) centred, its top at y0. False if it doesn't fit.
+static bool drawQr(const char *text, int16_t y0) {
+  QRCode qr;
+  uint8_t modules[qrcode_getBufferSize(3)];
+  if (qrcode_initText(&qr, modules, 3, ECC_LOW, text) != 0) return false;
+  const int scale = 3, x0 = (display.width() - qr.size * scale) / 2;
+  for (uint8_t y = 0; y < qr.size; y++)
+    for (uint8_t x = 0; x < qr.size; x++)
+      if (qrcode_getModule(&qr, x, y)) display.fillRect(x0 + x * scale, y0 + y * scale, scale, scale, BLACK);
+  return true;
+}
+
+// Paying payTo: their Cash App request for the payer, pasted on their phone page (house/phone.cpp), or else their
+// $cashtag's link, as a QR code a phone scans, with what it is under it.
 static void drawPay() {
   House &h = houseData();
   const char *tag = payTagOf(h, payTo);
+  const Record *req = activeRequest(h, payTo, payFrom ? payFrom : h.me);
   char title[32];
   snprintf(title, sizeof title, "Pay %s", payTo == h.me ? "you" : nameOf(h, payTo));
   drawHeader(title);
-  if (!tag) {
+  if (!tag && !req) {
     drawEmpty("No $cashtag yet", payTo == h.me ? "Set yours on Roommates" : "They set it on their unidex,",
               payTo == h.me ? "(B on yourself)." : "then Sync.");
     drawHints("", payFrom ? "settled" : "", "");
     return;
   }
-  char link[64];
-  cashAppLink(tag, payPence, AMOUNT_IN_LINK, link, sizeof link);
-  QRCode qr;
-  uint8_t modules[qrcode_getBufferSize(3)];
-  if (qrcode_initText(&qr, modules, 3, ECC_LOW, link) == 0) {
-    const int scale = 3, x0 = (display.width() - qr.size * scale) / 2, y0 = CONTENT_TOP + 5;
-    for (uint8_t y = 0; y < qr.size; y++)
-      for (uint8_t x = 0; x < qr.size; x++)
-        if (qrcode_getModule(&qr, x, y)) display.fillRect(x0 + x * scale, y0 + y * scale, scale, scale, BLACK);
-  }
-  char line[48], amount[16];
-  if (payPence) {
-    houseFormatMoney(payPence, amount, sizeof amount);
-    snprintf(line, sizeof line, "$%s  %s", tag, amount);
-  } else {
-    snprintf(line, sizeof line, "$%s", tag);
-  }
+  char link[64], line[48], amount[16];
+  if (req) requestLinkUrl(req->text, link, sizeof link);
+  else cashAppLink(tag, payPence, AMOUNT_IN_LINK, link, sizeof link);
+  drawQr(link, CONTENT_TOP + 5);
+  const uint32_t shown = req && req->a ? req->a : payPence;
+  houseFormatMoney(shown, amount, sizeof amount);
+  if (req) snprintf(line, sizeof line, shown ? "Cash App request  %s" : "Cash App request", amount);
+  else if (payPence) snprintf(line, sizeof line, "$%s  %s", tag, amount);
+  else snprintf(line, sizeof line, "$%s", tag);
   display.setFont(FONT_SMALL);
   drawCenteredLine(line, CONTENT_TOP + 5 + 29 * 3 + 18);
   display.setFont(FONT_TINY);
@@ -658,6 +675,45 @@ static void drawSync() {
   drawHints("", "", "");
 }
 
+#if UNIDEX_X4
+// ---- Pay by phone: the X4's hotspot, joined by scanning its QR code; the page then opens by itself.
+
+static uint32_t phoneSeen, phoneServedSeen;  // the phone page's changes and pages already on the screen
+
+static void drawPhone() {
+  drawHeader("Pay by phone", housePhoneOn() ? "on" : "");
+  if (!housePhoneOn()) {
+    drawEmpty("Stopped", "It stops after 5 minutes", "unused. B: start again");
+    drawHints("", "start", "");
+    return;
+  }
+  drawQr(hotspotJoinCode(), CONTENT_TOP + 5);
+  display.setFont(FONT_TINY);
+  drawCenteredLine(hotspotServed() ? "Connected: the page is open" : "Scan to join, the page opens", CONTENT_TOP + 104);
+  char line[48];
+  snprintf(line, sizeof line, "WiFi %s  password %s", hotspotSsid(), hotspotPassword());
+  drawCenteredLine(line, CONTENT_TOP + 118);
+  drawCenteredLine("Open, share or paste Cash App links", CONTENT_TOP + 132);
+  drawHints("", "", "");
+}
+
+static Redraw phoneTick() {
+  const bool wasOn = housePhoneOn();
+  housePhonePoll();
+  if (wasOn && !housePhoneOn()) return Redraw::Partial;  // stopped by itself
+  if (housePhoneChanges() != phoneSeen) {
+    phoneSeen = housePhoneChanges();
+    launcherToast("Saved from the phone");
+    return Redraw::Partial;
+  }
+  if ((hotspotServed() > 0) != (phoneServedSeen > 0)) {
+    phoneServedSeen = hotspotServed();
+    return Redraw::Partial;
+  }
+  return Redraw::None;
+}
+#endif
+
 // ---- The app
 
 static void draw() {
@@ -675,6 +731,9 @@ static void draw() {
     case AMOUNT: return drawAmount();
     case CONFIRM: return drawConfirm();
     case SYNC: return drawSync();
+#if UNIDEX_X4
+    case PHONE: return drawPhone();
+#endif
     case PAY: return drawPay();
     case CASHTAG: return drawCashtag();
     default: listRecords(); return drawList();
@@ -858,6 +917,14 @@ static Redraw onButton(Event e) {
         return Redraw::Partial;
       }
       if (e != Event::BShort) return Redraw::None;
+#if UNIDEX_X4
+      if (cursor == M_PHONE) {
+        screen = PHONE;
+        phoneSeen = 0;
+        if (!housePhoneStart()) launcherToast("WiFi is busy");
+        return Redraw::Full;
+      }
+#endif
       if (cursor == M_SYNC) {
         screen = SYNC;
         syncStart();
@@ -888,7 +955,7 @@ static Redraw onButton(Event e) {
       payFrom = m[d[cursor].from]->origin;
       payTo = m[d[cursor].to]->origin;
       payPence = d[cursor].pence;
-      if (payTagOf(h, payTo)) {  // whoever is owed has a $cashtag: show it first, then "settled?"
+      if (payTagOf(h, payTo) || activeRequest(h, payTo, payFrom)) {  // a way to pay them: show it, then "settled?"
         back = MONEY;
         screen = PAY;
         return Redraw::Full;
@@ -993,6 +1060,15 @@ static Redraw onButton(Event e) {
         return Redraw::Full;
       }
       return Redraw::None;
+#if UNIDEX_X4
+    case PHONE:
+      hotspotActivity();
+      if (e == Event::BShort && !housePhoneOn()) {
+        if (!housePhoneStart()) launcherToast("WiFi is busy");
+        return Redraw::Partial;
+      }
+      return Redraw::None;
+#endif
     default: return listButton(e);
   }
 }
@@ -1004,6 +1080,14 @@ static Redraw onBack() {
       open(houseData().id ? MENU : NO_HOUSE);
       cursor = M_SYNC;
       return Redraw::Full;
+#if UNIDEX_X4
+    case PHONE:
+      housePhoneStop();
+      open(MENU);
+      cursor = M_PHONE;
+      scrollTo(cursor, top, M_ROWS);
+      return Redraw::Full;
+#endif
     case PICK:
     case AMOUNT:
     case CONFIRM:
@@ -1030,10 +1114,18 @@ static void onEnter() {
   if (houseLoad()) houseUpdateMe();  // the Pet may have a new name or look since
 }
 
-static void onExit() { syncStop(); }
+static void onExit() {
+  syncStop();
+#if UNIDEX_X4
+  housePhoneStop();
+#endif
+}
 
 static Redraw tick() {
   if (screen == SYNC) return syncTick();
+#if UNIDEX_X4
+  if (screen == PHONE) return phoneTick();
+#endif
   return Redraw::None;
 }
 

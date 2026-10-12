@@ -50,6 +50,10 @@ Nothing has run on hardware yet. On two (ideally three) X4s, check:
 
 ## Phase 2: Cash App codes (small, high value): done, to test on devices
 
+Done since: **Pay by phone**: the X4's hotspot serves a page with Open, Share (Copy / Text / Email where the phone
+won't open its share sheet over http), and a box to paste Cash App payment requests (`cash.app/pay/link/...`) that
+roommates' X4s then show as the code to pay (docs/HOUSEHOLD.md).
+
 - Each roommate enters their $cashtag once: a letter picker on the X4, or typed on the website's Tools page over USB. It's an owner-only record shared with the household.
 - **Money screen:** on "You owe Pip $6.50", B shows a QR code for Pip's Cash App link. The amount is filled in if Cash App's `cash.app/$tag/amount` links still do that (to be checked); otherwise it's the plain profile link. Scanning it with your phone opens Cash App to pay. The QR code library is already in the firmware.
 - **Roommates screen:** each Pet's card shows its owner's code.

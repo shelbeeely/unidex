@@ -27,8 +27,10 @@ enum Kind : uint8_t {
   REMINDER = 6,  // text = what, a = 0 weekly (b = weekday, 0 Sunday) or 1 monthly (b = day of the month)
   MESSAGE = 7,   // text = what the Pet says, from origin; the newest few are kept
   PAYTAG = 8,    // text = the origin's Cash App $cashtag (without the $); only its owner's changes are accepted
+  PAYLINK = 9,   // a Cash App payment request the origin made in Cash App (https://cash.app/pay/link/<text>):
+                 // a = pence (0: not said), c = who it's for (0: anyone); owner-only like PAYTAG
 };
-static const uint8_t LAST_KIND = PAYTAG;
+static const uint8_t LAST_KIND = PAYLINK;
 enum Flags : uint8_t { DELETED = 1 };
 
 struct Record {
@@ -96,7 +98,7 @@ inline bool makeRoom(House &h) {
 }
 
 // Records only their owner may change: a $cashtag from anyone else's device could send roommates' money elsewhere.
-inline bool ownerOnly(uint8_t kind) { return kind == PAYTAG; }
+inline bool ownerOnly(uint8_t kind) { return kind == PAYTAG || kind == PAYLINK; }
 
 inline Merge merge(House &h, const Record &in) {
   if (ownerOnly(in.kind) && in.editor != in.origin) return OLDER;
@@ -326,6 +328,72 @@ inline void cashAppLink(const char *tag, uint32_t pence, bool withAmount, char *
   if (withAmount && pence)
     snprintf(out, len, "https://cash.app/$%s/%lu.%02lu", tag, (unsigned long)(pence / 100), (unsigned long)(pence % 100));
   else snprintf(out, len, "https://cash.app/$%s", tag);
+}
+
+// ---- Cash App payment requests: links a roommate made in Cash App ("Request $15 for food", Share link) and pasted
+// on their X4's phone page. Roommates' X4s show the request as the QR code to pay them, in place of the $cashtag link,
+// until the debt is settled.
+
+static const char REQUEST_PREFIX[] = "cash.app/pay/link/";
+static const size_t MIN_REQUEST_CODE = 4;
+
+// The request's code from whatever was pasted: the link alone, or Cash App's whole share text around it
+// ("Pay me $15 for food https://cash.app/pay/link/mu3w9zc7"). False if there's no request link in it.
+inline bool parseRequestLink(const char *pasted, char *code, size_t len) {
+  if (!pasted || len < 2) return false;
+  const char *at = strstr(pasted, REQUEST_PREFIX);
+  if (!at) return false;
+  at += sizeof REQUEST_PREFIX - 1;
+  size_t n = 0;
+  while (n + 1 < len && n < TEXT && ((at[n] >= 'a' && at[n] <= 'z') || (at[n] >= 'A' && at[n] <= 'Z') ||
+                                     (at[n] >= '0' && at[n] <= '9')))
+    code[n] = at[n], n++;
+  code[n] = 0;
+  return n >= MIN_REQUEST_CODE;
+}
+
+// An amount in pasted text ("$15", "$6.50", "15.5"), in pence; 0 if none.
+inline uint32_t parseAmount(const char *s) {
+  if (!s) return 0;
+  const char *p = strchr(s, '$');
+  p = p ? p + 1 : s;
+  while (*p == ' ') p++;
+  uint32_t whole = 0, cents = 0;
+  int digits = 0, decimals = 0;
+  for (; *p >= '0' && *p <= '9' && digits < 6; p++, digits++) whole = whole * 10 + (*p - '0');
+  if (!digits) return 0;
+  if (*p == '.')
+    for (p++; *p >= '0' && *p <= '9' && decimals < 2; p++, decimals++) cents = cents * 10 + (*p - '0');
+  if (decimals == 1) cents *= 10;
+  return whole * 100 + cents;
+}
+
+inline void requestLinkUrl(const char *code, char *out, size_t len) { snprintf(out, len, "https://cash.app/pay/link/%s", code); }
+
+inline Record *addRequestLink(House &h, const char *code, uint32_t pence, uint32_t forWhom) {
+  return add(h, PAYLINK, code, pence, 0, forWhom);
+}
+
+// Settled up: a payment from `payer` to `payee` recorded after the request was made.
+inline bool requestSpent(const House &h, const Record &link, uint32_t payer) {
+  for (int i = 0; i < h.count; i++) {
+    const Record &r = h.r[i];
+    if (live(r, SETTLE) && r.a == payer && r.c == link.origin && r.born > link.born) return true;
+  }
+  return false;
+}
+
+// The request `payee` made that `payer` should pay now (for them, or for anyone), newest first; nullptr if none.
+inline const Record *activeRequest(const House &h, uint32_t payee, uint32_t payer) {
+  const Record *best = nullptr;
+  for (int i = 0; i < h.count; i++) {
+    const Record &r = h.r[i];
+    if (!live(r, PAYLINK) || r.origin != payee || r.editor != payee) continue;
+    if (r.c && r.c != payer) continue;
+    if (requestSpent(h, r, payer)) continue;
+    if (!best || r.born > best->born) best = &r;
+  }
+  return best;
 }
 
 // ---- The radio. Every packet: "UDH", version, type, the household id (u32), then the type's fields.

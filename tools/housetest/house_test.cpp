@@ -204,6 +204,50 @@ int main() {
   cashAppLink("abcdefghijklmnopqrst", 9999999, true, link, sizeof link);
   check(strlen(link) <= 53, "the longest link fits a version 3 QR code (53 bytes)");
 
+  // ---- Cash App payment requests pasted from Cash App.
+  char code[32];
+  check(parseRequestLink("https://cash.app/pay/link/mu3w9zc7", code, sizeof code) && strcmp(code, "mu3w9zc7") == 0,
+        "a request link");
+  check(parseRequestLink("Pay me $15 for foods https://cash.app/pay/link/mu3w9zc7 thanks", code, sizeof code) &&
+            strcmp(code, "mu3w9zc7") == 0,
+        "a request link inside Cash App's share text");
+  check(!parseRequestLink("https://cash.app/$pip", code, sizeof code) &&
+            !parseRequestLink("cash.app/pay/link/ab", code, sizeof code) && !parseRequestLink("", code, sizeof code),
+        "not a request link");
+  check(parseAmount("Request $15 for foods") == 1500 && parseAmount("6.5") == 650 && parseAmount("$0.99") == 99 &&
+            parseAmount("none") == 0,
+        "amounts in pasted text");
+  House *q1 = newHouse(HOUSE, PIP, "Pip");
+  q1->me = BISCUIT;
+  add(*q1, MEMBER, "Biscuit");
+  q1->me = MOSS;
+  add(*q1, MEMBER, "Moss");
+  q1->me = PIP;
+  check(activeRequest(*q1, PIP, BISCUIT) == nullptr, "no request until one is pasted");
+  addRequestLink(*q1, "forall1", 1500, 0);
+  check(activeRequest(*q1, PIP, BISCUIT) && activeRequest(*q1, PIP, MOSS), "a request for anyone shows for everyone");
+  addRequestLink(*q1, "forbisc", 650, BISCUIT);
+  check(strcmp(activeRequest(*q1, PIP, BISCUIT)->text, "forbisc") == 0 &&
+            strcmp(activeRequest(*q1, PIP, MOSS)->text, "forall1") == 0,
+        "the newest request for you wins; others see the one for anyone");
+  q1->me = BISCUIT;
+  add(*q1, SETTLE, nullptr, BISCUIT, 650, PIP);
+  check(activeRequest(*q1, PIP, BISCUIT) == nullptr && activeRequest(*q1, PIP, MOSS) != nullptr,
+        "once Biscuit settles up, Biscuit's requests are spent; Moss still sees the one for anyone");
+  House *q2 = newHouse(HOUSE, MOSS, "Moss");
+  send(*q1, *q2);
+  check(activeRequest(*q2, PIP, MOSS) && strcmp(activeRequest(*q2, PIP, MOSS)->text, "forall1") == 0,
+        "requests reach roommates at Sync");
+  for (int i = 0; i < q2->count; i++)  // Moss's device tries to swap Pip's request for its own link
+    if (q2->r[i].kind == PAYLINK) {
+      strcpy(q2->r[i].text, "mosslink");
+      touch(*q2, q2->r[i]);
+    }
+  check(activeRequest(*q2, PIP, MOSS) == nullptr, "a request changed by someone else isn't shown");
+  char url[64];
+  requestLinkUrl("mu3w9zc7", url, sizeof url);
+  check(strcmp(url, "https://cash.app/pay/link/mu3w9zc7") == 0, "the link back");
+
   // ---- Reminders.
   Record bin = {};
   bin.kind = REMINDER, bin.a = 0, bin.b = 2;  // Tuesdays

@@ -33,7 +33,8 @@ src/
   apps/pet/             pet.cpp (Pet, Dress up, Name), parts.h (the art), meet.cpp (Meet), meet_logic.h,
                         friends_logic.h, send_logic.h (the radio rules, tested on a computer), usb.cpp (P commands)
   apps/badge/           badge.cpp, badge_file.* (BMP checks, shared with the USB upload and Pet)
-  apps/house/           house.cpp (the House's screens and Sync), store.cpp (/house.dat, the Pet's mood), house_logic.h
+  apps/house/           house.cpp (the House's screens and Sync), store.cpp (/house.dat, the Pet's mood), phone.cpp +
+                        phone_page.h (X4: Pay by phone over core/hotspot.*), house_logic.h
                         (records, merging, rota, money, radio packets; tools/housetest), see HOUSEHOLD.md
   core/
     launcher.*          splash, home carousel, routes buttons to the open app
