@@ -5,3 +5,4 @@ src/secrets.h
 shots/
 __pycache__/
 src/idf_component.yml
+src/idf_component.yml.orig
