@@ -40,7 +40,7 @@ function crc32(bytes, c = 0) {
 }
 
 // ---- Transports. run(lines) sends command lines and resolves with every reply line. A "?" goes last: its answer
-// ("unidex 1") says the X4 has done everything before it. Batches stay small for the X4's line buffer and URL size.
+// ("roomiepet 1") says the X4 has done everything before it. Batches stay small for the X4's line buffer and URL size.
 
 const onHotspot = location.hostname === '192.168.4.1' || new URLSearchParams(location.search).has('device');
 
@@ -109,7 +109,8 @@ function serialTransport(port) {
       for (const b of batches(cmds)) {
         lines.length = 0;
         await writer.write(enc.encode(b.join('\n') + '\n?\n'));
-        const got = await waitFor(l => l === 'unidex 1', 15000);
+        const got = await waitFor(l => l === 'roomiepet 1' || l === 'unidex 1', 15000);
+        if (got[got.length - 1] === 'unidex 1') throw new Error('That device runs unidex, not RoomiePet: this app only manages a RoomiePet');
         replies.push(...got.slice(0, -1));
       }
       return replies;

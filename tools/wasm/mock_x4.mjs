@@ -51,7 +51,7 @@ function handle(line, out) {
     if (body.lines.length === body.count) { timetable = body.lines; body = null; out.push('OK W 0'); }
     return;
   }
-  if (line === '?') return out.push('unidex 1');
+  if (line === '?') return out.push('roomiepet 1');
   if (line === 'H DUMP') {
     out.push(`HH ${house.id} ${house.me} ${house.clock} ${house.nextSeq} ${house.records.size}`);
     for (const h of house.records.values()) out.push('HR ' + h);

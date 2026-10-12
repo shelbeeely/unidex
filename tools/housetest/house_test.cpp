@@ -1,5 +1,5 @@
 // Checks the household's records, merging, rota, money and radio packets on a computer (no board needed):
-//   c++ -std=c++17 -O2 -I src/apps/house tools/housetest/house_test.cpp -o /tmp/house_test && /tmp/house_test
+//   c++ -std=c++17 -O2 -DUNIDEX_X4=1 -I src/apps/house tools/housetest/house_test.cpp -o /tmp/house_test && /tmp/house_test
 #include <cstdio>
 #include <cstdlib>
 #include <vector>
@@ -263,6 +263,11 @@ int main() {
   check(len <= 250 && decodeHello(buf, len, back) && back.id == PIP && back.time == hi.time && back.trusted == hi.trusted && back.clock == 4242 &&
             strcmp(back.name, "Pip") == 0 && back.house == HOUSE,
         "hello round trip");
+  check(memcmp(buf, "RPH", 3) == 0, "a RoomiePet's household packets start RPH");
+  uint8_t fromUnidex[250];
+  memcpy(fromUnidex, buf, len);
+  memcpy(fromUnidex, UNIDEX_MAGIC, 3);
+  check(typeOf(fromUnidex, len) == 0 && !decodeHello(fromUnidex, len, back), "a unidex's household packets are ignored");
   buf[30] = 1;
   check(!decodeHello(buf, len, back), "a name that isn't printable is refused");
   int count;

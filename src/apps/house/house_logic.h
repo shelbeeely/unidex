@@ -396,7 +396,8 @@ inline const Record *activeRequest(const House &h, uint32_t payee, uint32_t paye
   return best;
 }
 
-// ---- The radio. Every packet: "UDH", version, type, the household id (u32), then the type's fields.
+// ---- The radio. Every packet: "RPH" (RoomiePet, the X4 build) or "UDH" (unidex), version, type, the household id
+// (u32), then the type's fields. A RoomiePet only syncs with RoomiePets.
 //   HELLO   (to everyone, about twice a second while Sync is open): sender's Pet id u32, unix time u32 (0 if its clock
 //           isn't set), when its time was last set from the internet, USB or a clock chip u32 (unix; a device takes
 //           the time from one set more recently, see timeIsBetter), Pet look u32, Lamport clock u32 (a
@@ -405,6 +406,11 @@ inline const Record *activeRequest(const House &h, uint32_t payee, uint32_t paye
 //   RECORDS (to everyone): count u8, then that many records.
 // A device only merges records for its own household.
 
+#ifndef UNIDEX_X4
+#define UNIDEX_X4 0
+#endif
+static const char ROOMIEPET_MAGIC[3] = {'R', 'P', 'H'}, UNIDEX_MAGIC[3] = {'U', 'D', 'H'};
+static const char *const RADIO_MAGIC = UNIDEX_X4 ? ROOMIEPET_MAGIC : UNIDEX_MAGIC;
 static const uint8_t VERSION = 1;
 enum Type : uint8_t { HELLO = 1, RECORDS = 2 };
 static const size_t HEADER = 9, RECORD_LEN = 2 + 2 + 4 * 8 + 1 + TEXT, PER_PACKET = 3;
@@ -416,13 +422,13 @@ inline void put32(uint8_t *p, uint32_t v) {
 inline uint32_t get32(const uint8_t *p) { return p[0] | p[1] << 8 | p[2] << 16 | (uint32_t)p[3] << 24; }
 
 inline size_t header(uint8_t *out, Type t, uint32_t houseId) {
-  out[0] = 'U', out[1] = 'D', out[2] = 'H', out[3] = VERSION, out[4] = t;
+  memcpy(out, RADIO_MAGIC, 3), out[3] = VERSION, out[4] = t;
   put32(out + 5, houseId);
   return HEADER;
 }
 
 inline uint8_t typeOf(const uint8_t *p, size_t len) {
-  if (len < HEADER || p[0] != 'U' || p[1] != 'D' || p[2] != 'H' || p[3] != VERSION) return 0;
+  if (len < HEADER || memcmp(p, RADIO_MAGIC, 3) != 0 || p[3] != VERSION) return 0;
   return p[4];
 }
 inline uint32_t houseOf(const uint8_t *p) { return get32(p + 5); }

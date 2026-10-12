@@ -2,7 +2,7 @@
 // Sending a badge to a friend over the radio, a piece at a time. No Arduino code, so it can be checked on a
 // computer (tools/meettest).
 //
-// Packets (after meet_logic.h's "UDX", version, type; from u32, to u32):
+// Packets (after meet_logic.h's "RPM" or "UDX", version, type; from u32, to u32):
 //   OFFER   size u32, crc32 u32, name length u8 + up to 31 bytes        -> the receiver answers ACK READY (or BUSY)
 //   DATA    index u16, length u8, up to 200 bytes                      -> ACK index
 //   ACK     index u16 (READY, BUSY or a piece's index)

@@ -1,5 +1,5 @@
 // Checks the Pets' radio packets, the reach rule and the acts on a computer (no board needed):
-//   c++ -std=c++17 -O2 -I src/apps/pet tools/meettest/meet_test.cpp -o /tmp/meet_test && /tmp/meet_test
+//   c++ -std=c++17 -O2 -DUNIDEX_X4=1 -I src/apps/pet tools/meettest/meet_test.cpp -o /tmp/meet_test && /tmp/meet_test
 #include <cstdio>
 #include <cstdlib>
 #include "meet_logic.h"
@@ -39,6 +39,10 @@ int main() {
   memcpy(bad, p, n);
   bad[3] = 1;
   check(!decodeHello(bad, n, out) && typeOf(bad, n) == 0, "an older protocol version is ignored");
+  check(memcmp(p, "RPM", 3) == 0, "a RoomiePet's packets start RPM");
+  memcpy(bad, p, n);
+  memcpy(bad, UNIDEX_MAGIC, 3);
+  check(!decodeHello(bad, n, out) && typeOf(bad, n) == 0, "a unidex's Pet is never heard: RoomiePets only meet RoomiePets");
   memcpy(bad, p, n);
   bad[14] = '\n';
   check(!decodeHello(bad, n, out), "a name with a control character is ignored");

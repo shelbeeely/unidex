@@ -16,7 +16,8 @@
 #endif
 
 // Protocol (text lines, Mac -> device):
-//   ?                      -> "unidex 1"
+//   ?                      -> "roomiepet 1" on the X4, "unidex 1" on the Waveshare board: neither's tools work
+//                             with the other
 //   V                      -> "OK V <firmware version>" (from git, tools/version.py)
 //   T <unix seconds>       -> sets the clock, "OK T"
 //   C                      -> "OK C <clock chip registers and system time>" (diagnostics)
@@ -172,7 +173,7 @@ static void handle(const char *l) {
   if (devUsb(l)) return;  // test build: screenshots and virtual buttons
 #endif
   if (strcmp(l, "?") == 0) {
-    usbOut().println("unidex 1");
+    usbOut().println(UNIDEX_X4 ? "roomiepet 1" : "unidex 1");
   } else if (strcmp(l, "V") == 0) {
     usbOut().printf("OK V %s\n", UNIDEX_VERSION);
   } else if (strcmp(l, "C") == 0) {

@@ -2,7 +2,8 @@
 // Pets meeting over the radio: the packets, the list of Pets nearby, and the acts two Pets play across two screens
 // held side by side. No Arduino code, so it can be checked on a computer (tools/meettest).
 //
-// Every packet: "UDX", version, type, then the type's fields (numbers little-endian).
+// Every packet: "RPM" (RoomiePet, the X4 build) or "UDX" (unidex), version, type, then the type's fields (numbers
+// little-endian). The two never hear each other: a RoomiePet only meets RoomiePets.
 //   HELLO   (to everyone, 1-4 times a second while Meet is open): id u32 (random, made once per device; not its
 //           radio address), look u32 (pet_logic.h's pack), name length u8 + up to 12 bytes, heard u32 (the Pet
 //           this device hears best: the low 24 bits of its id, then how strongly (dBm, the top 8 bits))
@@ -17,8 +18,14 @@
 #include <stdint.h>
 #include <string.h>
 
+#ifndef UNIDEX_X4
+#define UNIDEX_X4 0
+#endif
+
 namespace meet {
 
+static const char ROOMIEPET_MAGIC[3] = {'R', 'P', 'M'}, UNIDEX_MAGIC[3] = {'U', 'D', 'X'};
+static const char *const RADIO_MAGIC = UNIDEX_X4 ? ROOMIEPET_MAGIC : UNIDEX_MAGIC;
 static const uint8_t VERSION = 2;
 static const size_t MAX_NAME = 12;
 enum Type : uint8_t { HELLO = 1, CONNECT = 3, ACT = 4, ASK = 5, ANSWER = 6 };
@@ -36,13 +43,13 @@ inline uint32_t get32(const uint8_t *p) { return p[0] | p[1] << 8 | p[2] << 16 |
 static const size_t HEADER = 5, HELLO_LEN = HEADER + 4 + 4 + 1 + MAX_NAME + 4;
 
 inline size_t header(uint8_t *out, Type t) {
-  out[0] = 'U', out[1] = 'D', out[2] = 'X', out[3] = VERSION, out[4] = t;
+  memcpy(out, RADIO_MAGIC, 3), out[3] = VERSION, out[4] = t;
   return HEADER;
 }
 
 // The type of a packet from another device, or 0 if it isn't one of ours (or a version we don't know).
 inline uint8_t typeOf(const uint8_t *p, size_t len) {
-  if (len < HEADER || p[0] != 'U' || p[1] != 'D' || p[2] != 'X' || p[3] != VERSION) return 0;
+  if (len < HEADER || memcmp(p, RADIO_MAGIC, 3) != 0 || p[3] != VERSION) return 0;
   return p[4];
 }
 
