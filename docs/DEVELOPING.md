@@ -133,7 +133,9 @@ disappears while it sleeps.
 
 - **Parts:** `src/apps/pet/parts.h` holds the art (32×32 per part, `#` ink, `o` paper, `.` see-through). The website's
   Pet designer uses the same parts: after changing them, run `python3 tools/pet/export.py` to update
-  `site/pet-parts.js` and the X4 web app's `site/x4/pet-art.js` (`--check` says if it's out of date).
+  `site/pet-parts.js` and the X4 web app's `site/x4/pet-art.js` (`--check` says if it's out of date), then
+  `python3 tools/pet/wardrobe_images.py` to redraw the README's style and wardrobe pictures. The website's RoomiePet
+  page (`site/roomiepet.html`) draws from `site/x4/pet-art.js` by itself.
 - **Meet** (`meet.cpp`, rules in `meet_logic.h`): devices say hello over ESP-NOW about once a second (four times a
   second with someone nearby), each with a random radio address per session. Closeness is the signal strength both
   ways: it tells "within about 15 cm" from "a metre away", not touching from 15 cm, so meeting needs a press. Once

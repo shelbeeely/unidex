@@ -12,6 +12,10 @@
 It runs on two buttons and a battery, and its code is public: free to use, fork and improve for non-commercial use.
 Install it from your browser in a minute, with no tools to set up.
 
+**New: RoomiePet on the Xteink X4.** The same firmware also runs on the [Xteink X4](docs/X4.md) e-reader, through
+the [FreeInk SDK](https://github.com/Free-Ink/freeink-sdk), as a cooperative household Tamagotchi for roommates:
+chores, shopping, money and Cash App, reminders, and Pets that dress up in [dozens of outfits](#roomiepet-on-the-xteink-x4).
+
 **Don't have the board?** Pre-orders for a fully assembled and tested unidex are now closed. To be told when more are
 available, join the wait list at [unidex-site.vercel.app](https://unidex-site.vercel.app).
 
@@ -42,6 +46,32 @@ passing it on, welcomes a new owner with the buttons and a link to the website, 
 SD card. Every change: [CHANGELOG.md](CHANGELOG.md).
 
 If unidex is useful to you, a star on GitHub helps other people find it.
+
+## RoomiePet on the Xteink X4
+
+![The eight Pet styles: Femboy, E-girl, Alternative, Emo, Goth, Masc, Femme and Bunny lad](docs/roomiepet-styles.png)
+
+Every roommate has an [Xteink X4](docs/X4.md) on the fridge, a door or a desk, each with their own Pet. The Pets share
+a virtual household, and keeping it up is the game. It's an early build that compiles but hasn't been tested on an X4
+yet; what's next is in the [roadmap](docs/ROADMAP.md).
+
+| | What it does |
+|---|---|
+| **Household** | Chores on a rota (whose turn, due and late), the shopping list, who owes whom (split fairly, settled in the fewest payments), bin day and rent reminders, and messages the Pets pass on. Devices swap it when held near each other: no server, no account. [More](docs/HOUSEHOLD.md) |
+| **Cash App** | Each roommate sets their $cashtag; the X4 shows a QR code to pay whoever is owed, with the amount. Paste a Cash App request (`cash.app/pay/link/...`) and roommates' X4s show that exact request instead. Share it by text, email or the phone's share sheet. [More](docs/HOUSEHOLD.md#paying-each-other-cash-app) |
+| **Pets** | Your Pet is proud when you've done your chores, sulks when one is late, cheers your roommates on and passes on their news. Chores earn EXP, levels and unlockable cosmetics. [More](docs/HOUSEHOLD.md#dress-up-styles-and-earning-cosmetics) |
+| **Wardrobe** | Seven layers (body, eyes, mouth, hat, extra, hair, outfit), 90 parts, and one-tap styles: Femboy, E-girl, Alternative, Emo, Goth, Masc, Femme and the Bunny lad. Every style's everyday pieces are free; showy ones (halo, horns, bat wings, corset, veil...) are earned with chores. |
+| **Web app** | Manage the whole X4 from a browser: on a phone over the X4's own WiFi (House, *Manage on phone*), or on a computer over USB from the [website](https://forrest404.github.io/unidex/x4/). The household rules run in the browser as WebAssembly compiled from the device's own C++, so they can never disagree. [More](docs/WEBAPP.md) |
+
+<details>
+<summary>The whole wardrobe (EXP shown on the parts that are earned)</summary>
+
+![Every Pet part: 12 hairstyles, 12 outfits, 16 hats, 16 extras, 10 eyes, 9 mouths and 6 bodies](docs/roomiepet-wardrobe.png)
+
+</details>
+
+Build it with `pio run -e x4` (see [docs/X4.md](docs/X4.md)); the website shows the styles and wardrobe on its
+[RoomiePet page](https://forrest404.github.io/unidex/roomiepet.html).
 
 ## Getting started
 
@@ -129,7 +159,9 @@ never in the code or on the card. Treat the device like an unlocked phone: anyon
 
 ### Pet
 
-A cute creature built from a body (blob, cat, bear, bunny, frog, robot), eyes, a mouth, a hat and an extra. It blinks
+A cute creature built from a body (blob, cat, bear, bunny, frog, robot), eyes, a mouth, a hat and an extra (on the
+Xteink X4 also hair and an outfit, with one-tap styles and parts earned from chores: see
+[RoomiePet](#roomiepet-on-the-xteink-x4)). It blinks
 every few seconds, and **A** says hi. **B** = Dress up: **A** moves between rows, **B** changes the part, **hold B**
 goes back one. The **Name** row names it a letter at a time; the name shows as a tag over its head. You can also
 dress it up and name it with a mouse on the website's [Tools](https://forrest404.github.io/unidex/tools.html) page.
