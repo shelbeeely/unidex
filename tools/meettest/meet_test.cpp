@@ -43,9 +43,10 @@ int main() {
   Hello withPr = hello(77, "Pip"), backPr;
   strcpy(withPr.pronouns, "they/them");
   withPr.flag = 0x83;
+  withPr.held = 9;
   n = encodeHello(withPr, p);
   check(n <= 250 && decodeHello(p, n, backPr) && strcmp(backPr.pronouns, "they/them") == 0 && strcmp(backPr.name, "Pip") == 0 &&
-            backPr.flag == 0x83,
+            backPr.flag == 0x83 && backPr.held == 9,
         "a HELLO carries the owner's pronouns and pride flag");
   n = encodeHello(in, p);
   memcpy(bad, p, n);

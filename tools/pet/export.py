@@ -42,7 +42,7 @@ names_c = re.search(r"LAYER_NAMES\[LAYERS\] = \{(.*?)\};", logic_h, re.S).group(
 layer_names = re.findall(r'"([A-Za-z]+)"', build(names_c, False))
 x4_names = re.findall(r'"([A-Za-z]+)"', build(names_c, True))
 x4_bits = [int(b) for b in build(re.search(r"LAYER_BITS\[LAYERS\] = \{(.*?)\};", logic_h, re.S).group(1), True).split(",")]
-waveshare_parts = [int(n) for n in re.search(r"WAVESHARE_PARTS\[LAYERS\] = \{(.*?)\};", logic_h).group(1).split(",")]
+waveshare_parts = [int(n) for n in re.search(r"WAVESHARE_PARTS\[LAYERS \+ 1\] = \{(.*?)\};", logic_h).group(1).split(",")]
 pronouns_h = open(os.path.join(root, "src/apps/pet/pronouns.h")).read()
 presets = re.findall(r'"([^"]*)"', re.search(r"PRESETS\[\] = \{(.*?)\};", pronouns_h, re.S).group(1))
 glyphs = re.findall(r'"([#.]{15})"', re.search(r"GLYPHS\[\] = \{.*?\n(.*?)\};", pronouns_h, re.S).group(1))
@@ -53,23 +53,24 @@ flag_list = [{"name": n, "shape": shape.lower(), "colours": ["#" + c[2:].upper()
              for n, shape, cs in re.findall(r'\{"([^"]+)", (STRIPES|PROGRESS|INTERSEX), \d+, \{([^}]*)\}\}', flags_h)]
 chevron = ["#" + c[2:].upper() for c in re.findall(r"0x[0-9A-Fa-f]{6}", re.search(r"PROGRESS_CHEVRON\[5\] = \{(.*?)\}", flags_h).group(1))]
 ring = "#" + re.search(r"INTERSEX_RING = 0x([0-9A-Fa-f]{6})", flags_h).group(1).upper()
-default = [int(x) for x in re.search(r"DEFAULT_LOOK = \{\{([\d,\s]+)\}", logic_h).group(1).split(",")]
+default = [int(x) for x in re.search(r"DEFAULT_LOOK = \{\{([\d,\s]+)\}", logic_h).group(1).split(",")][:7]  # the saved look (what it holds is kept apart)
 happy = int(re.search(r"HAPPY_EYES = (\d+)", logic_h).group(1))
 closed = parts(re.search(r"EYES_CLOSED = (\{.*?\}\});", parts_h, re.S).group(1))[0]
 # Example Pets (the RoomiePet page's cards and the README picture), by part name: body, eyes, mouth, hat, accessory,
-# hair, outfit; then pronouns, the pride flag, and what the pin shows ("pronouns", "flag" or None).
+# hair, outfit, held; then pronouns, the pride flag, and what the pin shows ("pronouns", "flag" or None).
 EXAMPLES = [
-    (["Blob", "Lashes", "Cat", "Cat ears", "Choker", "Fluffy bob", "Skirt"], "he/they", "Bi", "flag"),
-    (["Blob", "Eyeliner", "Fangs", "Clips", "Hearts", "Split dye", "Mesh top"], "she/her", "Trans", "pronouns"),
-    (["Blob", "Dots", "Lip ring", "None", "Safety pin", "Liberty", "Patch vest"], "they/them", "Nonbinary", "pronouns"),
-    (["Blob", "Smudged", "Small o", "None", "Wristband", "Emo fringe", "Zip hoodie"], "he/him", "Gay", "flag"),
-    (["Blob", "Eyeliner", "Lipstick", "None", "Cross", "Ringlets", "Cape"], "she/they", "Ace", None),
-    (["Blob", "Dots", "Smirk", "None", "Dog tags", "Slick back", "Leather"], "he/him", "Progress", "flag"),
-    (["Blob", "Lashes", "Lipstick", "Sun hat", "Earrings", "Long", "Sundress"], "she/her", "Lesbian", "pronouns"),
-    (["Bunny", "Dots", "Smile", "Top hat", "Bow tie", "None", "Waistcoat"], "any", "Rainbow", "flag"),
+    (["Blob", "Lashes", "Cat", "Cat ears", "Choker", "Fluffy bob", "Skirt", "Broom"], "he/they", "Bi", "flag"),
+    (["Blob", "Eyeliner", "Fangs", "Clips", "Hearts", "Split dye", "Mesh top", "Wand"], "she/her", "Trans", "pronouns"),
+    (["Blob", "Dots", "Lip ring", "None", "Safety pin", "Liberty", "Patch vest", "Spray"], "they/them", "Nonbinary", "pronouns"),
+    (["Blob", "Smudged", "Small o", "None", "Wristband", "Emo fringe", "Zip hoodie", "None"], "he/him", "Gay", "flag"),
+    (["Blob", "Eyeliner", "Lipstick", "None", "Cross", "Ringlets", "Cape", "Lantern"], "she/they", "Ace", None),
+    (["Blob", "Dots", "Smirk", "None", "Dog tags", "Slick back", "Leather", "Hammer"], "he/him", "Progress", "flag"),
+    (["Blob", "Lashes", "Lipstick", "Sun hat", "Earrings", "Long", "Sundress", "Water can"], "she/her", "Lesbian", "pronouns"),
+    (["Bunny", "Dots", "Smile", "Top hat", "Bow tie", "None", "Waistcoat", "Cupcake"], "any", "Rainbow", "flag"),
 ]
 ARRAYS = ["BODIES", "EYES", "MOUTHS", "HATS", "EXTRAS", "HAIRS", "OUTFITS"]
 all_layers = [{"name": n, "parts": array(a)} for n, a in zip(x4_names, ARRAYS)]
+all_layers.append({"name": "Holding", "parts": array("HELD_PARTS")})  # pet_logic.h's HELD: drawn last
 names_of = [[p["name"] for p in layer["parts"]] for layer in all_layers]
 flag_names = [f["name"] for f in flag_list]
 examples = [{"parts": [names_of[i].index(n) for i, n in enumerate(names)], "pronouns": pr,
@@ -77,11 +78,12 @@ examples = [{"parts": [names_of[i].index(n) for i, n in enumerate(names)], "pron
 # The Tools page's designer (the Waveshare board) has rows for the first five, with the parts it always had.
 layers = [{"name": n, "parts": array(a)[:k]} for n, a, k in zip(layer_names, ARRAYS, waveshare_parts)][:5]
 order_names = re.search(r"DRAW_ORDER\[LAYERS\] = \{(.*?)\};", logic_h).group(1).replace(" ", "").split(",")
-index_of = {"BODY": 0, "EYES_LAYER": 1, "MOUTH": 2, "HAT": 3, "EXTRA": 4, "HAIR": 5, "OUTFIT": 6}
+index_of = {"BODY": 0, "EYES_LAYER": 1, "MOUTH": 2, "HAT": 3, "EXTRA": 4, "HAIR": 5, "OUTFIT": 6, "HELD": 7}
 draw_order = [index_of[n] for n in order_names]
+x4_draw_order = draw_order + [7]  # then what it holds
 rarity_of = {"UNCOMMON": 1, "RARE": 2, "LEGENDARY": 3}
 drops = [{"layer": index_of[l], "part": int(p), "rarity": rarity_of[r], "what": w}
-         for l, p, r, w in re.findall(r'\{(BODY|EYES_LAYER|MOUTH|HAT|EXTRA|HAIR|OUTFIT), (\d+), (UNCOMMON|RARE|LEGENDARY), "([^"]+)"\}', logic_h)]
+         for l, p, r, w in re.findall(r'\{(BODY|EYES_LAYER|MOUTH|HAT|EXTRA|HAIR|OUTFIT|HELD), (\d+), (UNCOMMON|RARE|LEGENDARY), "([^"]+)"\}', logic_h)]
 assert drops, "no DROPS found in pet_logic.h"
 
 js = ("// Generated by tools/pet/export.py from src/apps/pet/parts.h and pet_logic.h: don't edit, run the script.\n"
@@ -95,7 +97,7 @@ x4_js = ("// Generated by tools/pet/export.py from src/apps/pet/parts.h and pet_
          "// saved look (the top bit: the pronoun pin), the gifts that drop after chores (rarity 1 uncommon, 2 rare,\n"
          "// 3 legendary; every other part is a starter), the pin's 3x5 letters and the pronoun choices (pronouns.h).\n"
          f"export const LAYERS = {json.dumps(all_layers, separators=(',', ':'))};\n"
-         f"export const DRAW_ORDER = {json.dumps(draw_order)};\n"
+         f"export const DRAW_ORDER = {json.dumps(x4_draw_order)};\n"
          f"export const BITS = {json.dumps(x4_bits)};\n"
          f"export const PIN_CHARS = {json.dumps(chars)};\n"
          f"export const PIN_GLYPHS = {json.dumps(glyphs)};\n"
