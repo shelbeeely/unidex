@@ -23,7 +23,8 @@ This list was compiled from each project's own licence files and package metadat
 | Mozilla root certificate list (certs/x509_crt_bundle.bin, 2024-09-24) | – | MPL-2.0 | Mozilla contributors | https://curl.se/docs/caextract.html |
 | ES8311 register values and start-up sequences in src/core/audio.cpp | esp_codec_dev 1.3.5 | Apache-2.0 | 2023 Espressif Systems (Shanghai) CO LTD | https://github.com/espressif/esp-adf/tree/master/components/esp_codec_dev |
 | Note clean-up prompt in src/apps/notes/cloud.cpp | – | MIT (see below) | 2026 Forrest | https://github.com/Forrest404/forrest-notes |
-| FreeInk SDK (X4 build only: BoardConfig, EInkDisplay, InputManager, BatteryMonitor; the freeink-sdk submodule) | 1a5448d | MIT (see below) | 2026 FreeInk; portions from the OpenX4 E-Paper Community SDK (CidVonHighwind and contributors) | https://github.com/Free-Ink/freeink-sdk |
+| FreeInk SDK (X4 build only: BoardConfig, EInkDisplay, InputManager, BatteryMonitor, SDCardManager, PowerManager; the freeink-sdk submodule) | 1a5448d | MIT (see below) | 2026 FreeInk; portions from the OpenX4 E-Paper Community SDK (CidVonHighwind and contributors) | https://github.com/Free-Ink/freeink-sdk |
+| SdFat (X4 build only, used by the SDK's SDCardManager) | 2.x | MIT | Bill Greiman | https://github.com/greiman/SdFat |
 | Arduino core for ESP32 and ESP-IDF (X4 build only, through the pioarduino platform) | 3.3.7 / 5.5 | LGPL-2.1-or-later and Apache-2.0, as above | Arduino team; Espressif Systems | https://github.com/espressif/arduino-esp32 |
 
 **Changes to Apache-2.0 material:** the ES8311 register values and sequences from Espressif's `es8311.c` were

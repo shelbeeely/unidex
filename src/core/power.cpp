@@ -15,6 +15,7 @@ static uint32_t idleMs = 10000;  // Settings: 10, 20, 30 or 60 s (NVS sleep_s)
 
 #if UNIDEX_X4
 #include <BoardConfig.h>
+#include <PowerManager.h>
 // Xteink X4: GPIO13 HIGH keeps battery power on (LOW cuts it). The panel has no power switch. Deep sleep can wake
 // only on GPIO0-5 going LOW: Power (GPIO3) and the two button ladders (GPIO1, GPIO2), which only Right and Down
 // pull low enough. Light sleep can't see the other ladder keys either, so naps there are short (powerNap).
@@ -71,6 +72,9 @@ void powerInit() {
     gpio_hold_dis(h.pin);
   }
   gpio_deep_sleep_hold_dis();
+#if UNIDEX_X4
+  BoardConfig::holdPowerRails();  // the SDK's battery latch (GPIO13 HIGH), as its board profile says
+#endif
   idleMs = storageGetInt("sleep_s", 10) * 1000;
 
 #if !UNIDEX_X4
@@ -124,12 +128,17 @@ static void deepSleep(uint64_t timerUs) {
   storageEnd();  // unmount the SD card cleanly (it stays powered: no switch on its supply)
   esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);  // drop powerNap's timer and GPIO sources
 #if UNIDEX_X4
-  esp_deep_sleep_enable_gpio_wakeup(WAKE_MASK, ESP_GPIO_WAKEUP_GPIO_LOW);
+  // The SDK arms the wake pins the C3's way and isolates the other pins for the lowest sleep current. The latch,
+  // RST and CS holds above stay (it enables the deep-sleep holds too).
+  freeink::PowerManager::armWakeOnPins(WAKE_MASK, true);
+  if (timerUs) esp_sleep_enable_timer_wakeup(timerUs);
+  freeink::PowerManager::powerDownRailsForSleep();  // nothing to switch off on the X4; kept for the SDK's order
+  freeink::PowerManager::deepSleep();
 #else
   esp_sleep_enable_ext1_wakeup(WAKE_MASK, ESP_EXT1_WAKEUP_ANY_LOW);
-#endif
   if (timerUs) esp_sleep_enable_timer_wakeup(timerUs);
   esp_deep_sleep_start();
+#endif
 }
 
 #if UNIDEX_DEV

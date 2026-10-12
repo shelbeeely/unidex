@@ -6,15 +6,30 @@
 #include "devtools.h"
 
 #if UNIDEX_X4
-// Xteink X4: the card is on the panel's SPI bus (SCK 8, MOSI 10, MISO 7; displayInit starts it), selected by GPIO12.
-#include <SD.h>
-#include <SPI.h>
-static fs::SDFS &CARD = SD;
-static const int SD_CS = 12;
+// Xteink X4: the FreeInk SDK's SD card manager (SdFat on the panel's SPI bus, CS 12), as an fs::FS (sdkcard.cpp).
+#include "sdkcard.h"
+static fs::FS &CARD = sdkCard();
+static bool cardBegin() { return sdkCardBegin(); }
+static void cardEnd() { sdkCardEnd(); }
+static uint64_t cardUsed() { return sdkCardUsed(); }
+static uint64_t cardTotal() { return sdkCardTotal(); }
+static const char *cardKind() { return "SD"; }
 #else
 #include <SD_MMC.h>
 static fs::SDMMCFS &CARD = SD_MMC;
 static const int SD_CLK = 39, SD_CMD = 41, SD_D0 = 40;  // Waveshare 04_SD_Card example + schematic
+static bool cardBegin() {
+  SD_MMC.setPins(SD_CLK, SD_CMD, SD_D0);
+  return SD_MMC.begin("/sdcard", true /*1-bit*/, false /*never format: it would erase the card*/);
+}
+static void cardEnd() { SD_MMC.end(); }
+static uint64_t cardUsed() { return SD_MMC.usedBytes(); }
+static uint64_t cardTotal() { return SD_MMC.totalBytes(); }
+static const char *cardKind() {
+  static const char *TYPES[] = {"none", "MMC", "SD", "SDHC", "unknown"};
+  const uint8_t type = SD_MMC.cardType();
+  return TYPES[type < 4 ? type : 4];
+}
 #endif
 
 static const char *NVS_NAMESPACE = "unidex";
@@ -167,8 +182,8 @@ void storageEraseAll() {
 
 bool storageUsage(uint64_t &used, uint64_t &total) {
   if (!storageCardMount()) return false;
-  used = CARD.usedBytes();
-  total = CARD.totalBytes();
+  used = cardUsed();
+  total = cardTotal();
   return true;
 }
 
@@ -201,14 +216,9 @@ static void copyFromFlashOnce() {
 bool storageCardMount() {
   if (devNoCard()) return false;  // test build switch (X NOCARD 1)
   if (cardMounted) return true;
-#if UNIDEX_X4
-  cardMounted = CARD.begin(SD_CS, SPI, 20000000, "/sdcard");  // SD.begin never formats the card
-#else
-  CARD.setPins(SD_CLK, SD_CMD, SD_D0);
-  cardMounted = CARD.begin("/sdcard", true /*1-bit*/, false /*never format: it would erase the card*/);
-#endif
+  cardMounted = cardBegin();
   if (!cardMounted) {
-    CARD.end();  // missing, not FAT, or broken
+    cardEnd();  // missing, not FAT, or broken
     return false;
   }
   copyFromFlashOnce();
@@ -217,7 +227,7 @@ bool storageCardMount() {
 
 void storageEnd() {
   if (!cardMounted) return;
-  CARD.end();
+  cardEnd();
   cardMounted = false;
 }
 
@@ -239,16 +249,14 @@ void storageCardTest() {
     Serial.println("OK S none (no card, or not FAT32)");
     return;
   }
-  static const char *TYPES[] = {"none", "MMC", "SD", "SDHC", "unknown"};
-  const uint8_t type = CARD.cardType();
-  Serial.printf("OK S ok %s %llu MB, %llu MB used\n", TYPES[type < 4 ? type : 4],
-                CARD.cardSize() / (1024 * 1024), CARD.usedBytes() / (1024 * 1024));
+  Serial.printf("OK S ok %s %llu MB, %llu MB used\n", cardKind(), cardTotal() / (1024 * 1024),
+                cardUsed() / (1024 * 1024));
   listCard("/");
   Serial.println("OK S end");
 }
 
 void storageCardUnmount() {
   if (!cardMounted) return;
-  CARD.end();
+  cardEnd();
   cardMounted = false;
 }
