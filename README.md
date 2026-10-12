@@ -10,7 +10,7 @@ drop for keeping the house up.
   <a href="LICENSE"><img height="36" alt="Licence: PolyForm Noncommercial" src="https://img.shields.io/badge/licence-PolyForm%20Noncommercial-black?style=for-the-badge"></a>
 </p>
 
-![The eight Pet styles: Femboy, E-girl, Alternative, Emo, Goth, Masc, Femme and Bunny lad](docs/roomiepet-styles.png)
+![Eight Pets in different outfits, some wearing pronoun pins: SHE/HER, THEY/THEM, HE/HIM and ANY](docs/roomiepet-pets.png)
 
 Every roommate has an [Xteink X4](docs/X4.md) on the fridge, a door or a desk, each with their own Pet. The Pets share
 a virtual household, and keeping it up is the game. It runs on the [FreeInk SDK](https://github.com/Free-Ink/freeink-sdk)
@@ -21,20 +21,21 @@ yet; what's next is in the [roadmap](docs/ROADMAP.md).
 |---|---|
 | **Household** | Chores on a rota (whose turn, due and late), the shopping list, who owes whom (split fairly, settled in the fewest payments), bin day and rent reminders, and messages the Pets pass on. Devices swap it when held near each other: no server, no account. [More](docs/HOUSEHOLD.md) |
 | **Cash App** | Each roommate sets their $cashtag; the X4 shows a QR code to pay whoever is owed, with the amount. Paste a Cash App request (`cash.app/pay/link/...`) and roommates' X4s show that exact request instead. Share it by text, email or the phone's share sheet. [More](docs/HOUSEHOLD.md#paying-each-other-cash-app) |
-| **Pets** | Your Pet is proud when you've done your chores, sulks when one is late, cheers your roommates on and passes on their news. Chores give it levels and, now and then, a gift. [More](docs/HOUSEHOLD.md#dress-up-styles-and-gifts) |
-| **Wardrobe** | Seven layers (body, eyes, mouth, hat, extra, hair, outfit), 90 parts, and one-tap styles: Femboy, E-girl, Alternative, Emo, Goth, Masc, Femme and the Bunny lad. Every style's everyday pieces are starters every Pet has; showy ones (halo, horns, bat wings, corset, veil...) are gifts. |
+| **Pets** | Your Pet is proud when you've done your chores, sulks when one is late, cheers your roommates on and passes on their news. Chores give it levels and, now and then, a gift. [More](docs/HOUSEHOLD.md#dress-up-pronouns-and-gifts) |
+| **Wardrobe** | Seven layers (body, eyes, mouth, hat, accessory, hair, outfit) and over 120 parts: 26 outfits, 18 hairstyles, 23 hats and 30 accessories, and a bunny lad. Dress up on the X4 (Pet, B) or with the web app's Pet designer. Everyday pieces are starters every Pet has; showy ones (halo, maid dress, lace dress, tiara...) are gifts. |
+| **Pronouns** | Set yours on the X4 or in the web app (a list, or anything up to 12 characters). They show beside your Pet's name, on its **pronoun pin** (a badge on its chest), on its name tag when it meets other Pets and in their friends lists, and on your household's Roommates. [More](docs/HOUSEHOLD.md#pronouns) |
 | **Gifts** | Nothing is bought or spent. Like loot from a game's NPC, a gift can drop after any chore: uncommon, rare or legendary, never a duplicate. The odds go up for a chore done on time, covering a roommate's turn, rescuing a late one, your first today and a streak of days, and a dry spell always ends with one. [More](docs/HOUSEHOLD.md#gifts) |
 | **Web app** | Manage the whole X4 from a browser: on a phone over the X4's own WiFi (House, *Manage on phone*), or on a computer over USB from the [website](https://forrest404.github.io/unidex/x4/). The household rules run in the browser as WebAssembly compiled from the device's own C++, so they can never disagree. [More](docs/WEBAPP.md) |
 
 <details>
 <summary>The whole wardrobe (gifts marked with their rarity)</summary>
 
-![Every Pet part: 12 hairstyles, 12 outfits, 16 hats, 16 extras, 10 eyes, 9 mouths and 6 bodies](docs/roomiepet-wardrobe.png)
+![Every Pet part: 27 outfits, 19 hairstyles, 24 hats, 31 accessories, 10 eyes, 9 mouths and 6 bodies](docs/roomiepet-wardrobe.png)
 
 </details>
 
 Build it with `pio run -e x4` (see [docs/X4.md](docs/X4.md)); the [website](https://forrest404.github.io/unidex/)
-shows the styles, the wardrobe and the odds of each gift.
+shows example Pets, a dress-up with pronoun pins, the whole wardrobe and the odds of each gift.
 
 If RoomiePet is useful to you, a star on GitHub helps other people find it.
 
@@ -170,7 +171,7 @@ never in the code or on the card. Treat the device like an unlocked phone: anyon
 ### Pet
 
 A cute creature built from a body (blob, cat, bear, bunny, frog, robot), eyes, a mouth, a hat and an extra (on the
-Xteink X4 also hair and an outfit, with one-tap styles and gifts that drop after chores: see
+Xteink X4 also hair, an outfit, pronouns and a pronoun pin, and gifts that drop after chores: see
 [RoomiePet](#roomiepet)). It blinks
 every few seconds, and **A** says hi. **B** = Dress up: **A** moves between rows, **B** changes the part, **hold B**
 goes back one. The **Name** row names it a letter at a time; the name shows as a tag over its head. You can also

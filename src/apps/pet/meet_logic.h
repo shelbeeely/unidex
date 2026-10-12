@@ -6,7 +6,8 @@
 // little-endian). The two never hear each other: a RoomiePet only meets RoomiePets.
 //   HELLO   (to everyone, 1-4 times a second while Meet is open): id u32 (random, made once per device; not its
 //           radio address), look u32 (pet_logic.h's pack), name length u8 + up to 12 bytes, heard u32 (the Pet
-//           this device hears best: the low 24 bits of its id, then how strongly (dBm, the top 8 bits))
+//           this device hears best: the low 24 bits of its id, then how strongly (dBm, the top 8 bits)); on
+//           RoomiePet then the owner's pronouns: length u8 + up to 12 bytes (pronouns.h)
 //   CONNECT (someone pressed B with another device in reach): from u32, to u32
 //   ACT     (the left device starts an act; both play it from when it arrived): from u32, to u32, act u8, actor u8,
 //           seed u32
@@ -30,9 +31,12 @@ static const uint8_t VERSION = 2;
 static const size_t MAX_NAME = 12;
 enum Type : uint8_t { HELLO = 1, CONNECT = 3, ACT = 4, ASK = 5, ANSWER = 6 };
 
+static const size_t MAX_PRONOUNS = 12;  // pronouns.h's MAX
+
 struct Hello {
   uint32_t id, look, heard;
   char name[MAX_NAME + 1];
+  char pronouns[MAX_PRONOUNS + 1];  // RoomiePet's HELLO carries them (unidex's has none); zero a Hello before use
 };
 
 inline void put32(uint8_t *p, uint32_t v) {
@@ -40,7 +44,8 @@ inline void put32(uint8_t *p, uint32_t v) {
 }
 inline uint32_t get32(const uint8_t *p) { return p[0] | p[1] << 8 | p[2] << 16 | (uint32_t)p[3] << 24; }
 
-static const size_t HEADER = 5, HELLO_LEN = HEADER + 4 + 4 + 1 + MAX_NAME + 4;
+// RoomiePet's HELLO adds the owner's pronouns: length u8 + up to 12 bytes, after heard.
+static const size_t HEADER = 5, HELLO_LEN = HEADER + 4 + 4 + 1 + MAX_NAME + 4 + (UNIDEX_X4 ? 1 + MAX_PRONOUNS : 0);
 
 inline size_t header(uint8_t *out, Type t) {
   memcpy(out, RADIO_MAGIC, 3), out[3] = VERSION, out[4] = t;
@@ -62,6 +67,13 @@ inline size_t encodeHello(const Hello &h, uint8_t *out) {
   memset(out + 14, 0, MAX_NAME);
   memcpy(out + 14, h.name, n);
   put32(out + 14 + MAX_NAME, h.heard);
+  if (UNIDEX_X4) {
+    uint8_t *pr = out + 18 + MAX_NAME;
+    const size_t k = strnlen(h.pronouns, MAX_PRONOUNS);
+    pr[0] = k;
+    memset(pr + 1, 0, MAX_PRONOUNS);
+    memcpy(pr + 1, h.pronouns, k);
+  }
   return HELLO_LEN;
 }
 
@@ -75,6 +87,15 @@ inline bool decodeHello(const uint8_t *p, size_t len, Hello &h) {
   memcpy(h.name, p + 14, p[13]);
   h.name[p[13]] = 0;
   h.heard = get32(p + 14 + MAX_NAME);
+  h.pronouns[0] = 0;
+  if (UNIDEX_X4) {
+    const uint8_t *pr = p + 18 + MAX_NAME;
+    if (pr[0] > MAX_PRONOUNS) return false;
+    for (size_t i = 0; i < pr[0]; i++)
+      if (pr[1 + i] < 0x20 || pr[1 + i] > 0x7E) return false;
+    memcpy(h.pronouns, pr + 1, pr[0]);
+    h.pronouns[pr[0]] = 0;
+  }
   return h.id != 0;
 }
 
@@ -127,6 +148,7 @@ inline int heardOf(uint32_t heard, uint32_t me) {
 struct Nearby {
   uint32_t id, look, lastHeard;
   char name[MAX_NAME + 1];
+  char pronouns[MAX_PRONOUNS + 1];
   uint8_t mac[6];
   int8_t readings[8];  // the latest strengths, the newest at [(count - 1) % 8]
   uint8_t count;
@@ -151,10 +173,11 @@ class NearbyList {
     }
     Nearby &p = pets[i];
     const bool wasInReach = !isNew && inReach(i);
-    const bool changed = isNew || p.look != h.look || strcmp(p.name, h.name) != 0;
+    const bool changed = isNew || p.look != h.look || strcmp(p.name, h.name) != 0 || strcmp(p.pronouns, h.pronouns) != 0;
     p.id = h.id, p.look = h.look, p.lastHeard = now;
     p.theirs = (int8_t)heardOf(h.heard, me);
     memcpy(p.name, h.name, sizeof p.name);
+    memcpy(p.pronouns, h.pronouns, sizeof p.pronouns);
     memcpy(p.mac, mac, 6);
     if (rssi) {
       p.readings[p.count % 8] = rssi;

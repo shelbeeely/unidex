@@ -65,38 +65,40 @@ device.
   home screen meanwhile.
 - On a reminder's day it says so ("Bin day today!").
 
-## Dress-up, styles and gifts
+## Dress-up, pronouns and gifts
 
-A Pet's look has seven layers: Body, Eyes, Mouth, Hat, Extra, **Hair** and **Outfit**. It's drawn in this order:
-the body, its outfit, the face, the hair (a fringe can cover an eye), then hats and extras. Dress it up on the X4
-(Pet, B) or in the web app (Settings), which shows a live preview.
+A Pet's look has seven layers: Body, Eyes, Mouth, Hat, Accessory, **Hair** and **Outfit**, from a wardrobe of over
+120 parts. It's drawn in this order: the body, its outfit, the face, the hair (a fringe can cover an eye), then hats
+and accessories, then the pronoun pin.
 
-**Styles** put on a whole look in one go. On the X4 it's the **Style** row in dress-up (B: next, hold B: previous);
-in the web app, a button each. A style leaves anything it doesn't name as it is, and any gift not found yet stays
-as it was until it drops.
+- **On the X4:** Pet, B. The rows go Outfit, Hair, Hat, Accessory, Body, Eyes, Mouth (B: next, hold B: previous),
+  then **Pronouns**, **Pronoun pin** (B: put on / take off), Name, Random look and Done.
+- **In the web app:** the **Pet** tab is the Pet designer: a live preview, a row a layer with ◀ and ▶, a strip of
+  every piece in the layer you're on (tap one to put it on), Random, the name, your pronouns (a list, or Other... for
+  anything up to 12 characters), the pin, and **Wear it on the X4**. **Load from the X4** puts back what it's wearing.
 
-| Style | What it puts on |
-|---|---|
-| Femboy | Lashes, cat ears, bell choker, fluffy bob, pleated skirt |
-| E-girl | Winged eyeliner, fangs, cheek hearts, split dye, striped top |
-| Alternative | Lip ring, studded collar, mohawk, band tee |
-| Emo | Smudged eyes, small "o" mouth, chain, emo fringe, hoodie |
-| Goth | Winged eyeliner, dark lips, lace veil*, ankh, long black hair, corset* |
-| Masc | Smirk, bucket hat, chain, buzz cut, leather jacket* |
-| Femme | Lashes, lipstick, flower wreath*, pearls*, long waves, sundress |
-| Bunny lad | The Bunny body, backwards cap, bow tie |
+The parts:
 
-\* a gift (below). Everything else in every style is a starter every Pet has, so nobody has to earn being themselves.
+- **Outfits (26):** Skirt, Hoodie, Sweater, Band tee, Stripes, Corset*, Leather*, Flannel, Sundress, Overalls, Tutu, Crop top, Maid dress*, Mesh top, Plaid, Ripped tee, Patch vest, Zip hoodie, Checkers, Cape, Lace dress*, Suit*, Tank top, Blouse, Cardigan, Waistcoat
+- **Hair (18):** Fluffy bob, Long, Buzz cut, Mohawk, Undercut, Emo fringe, Pigtails, Split dye, Space buns, Waves, Wolf cut, Soft curls, Bangs, Liberty, Side swoop, Ringlets, Slick back, Ponytail
+- **Hats (23):** Bow, Beanie, Crown, Flower, Headphones, Cap, Wizard hat*, Chef hat*, Cat ears, Horns*, Halo*, Witch hat*, Veil*, Wreath*, Bucket hat, Maid band, Clips, Bandana, Scene bow, Top hat, Sweatband, Sun hat, Tiara*
+- **Accessories (30):** Blush, Scarf, Bow tie, Star, Apron*, Duster*, Medal*, Choker, Studs, Pearls*, Chain, Bat wings*, Hearts, Ankh, Bandaid, Hair bow, Heart clip, Star clips, Spikes, Safety pin, Nose ring, Wristband, Tear, Cross, Spider*, Dog tags, Shades*, Earrings, Rose*, Carrot
+- **Eyes:** Dots, Sparkly, Happy, Sleepy, Wink, Glasses, Eyeliner, Lashes, Hearts, Smudged. **Mouths:** Smile, Open, Cat, Tongue, Small o, Fangs, Lip ring, Lipstick, Smirk. **Bodies:** Blob, Cat, Bear, Bunny, Frog, Robot
 
-All the parts:
+\* a gift (below). Everything else is a starter every Pet has, so nobody has to earn being themselves.
 
-- **Hair:** Fluffy bob, Long, Buzz cut, Mohawk, Undercut, Emo fringe, Pigtails, Split dye, Space buns, Waves, Wolf cut
-- **Outfits:** Skirt (pleated), Hoodie, Sweater, Band tee, Stripes, Corset, Leather (jacket), Flannel, Sundress,
-  Overalls, Tutu
-- **Eyes** (new): Eyeliner, Lashes, Hearts, Smudged. **Mouths** (new): Fangs, Lip ring, Lipstick, Smirk
-- **Hats** (new): Cap, Cat ears, Horns, Halo, Witch hat, Veil, Wreath, Bucket hat (and Wizard and Chef hats)
-- **Extras** (new): Choker (with a bell), Studs, Pearls, Chain, Bat wings, Hearts, Ankh, Bandaid (and Apron, Duster,
-  Medal)
+### Pronouns
+
+Each roommate can set their pronouns: he/him, she/her, they/them, he/they, she/they, they/he, they/she, any, it/its,
+xe/xem, ze/zir, fae/faer or "ask me" on the X4, or anything up to 12 characters (letters, `/`, `-`, spaces and
+apostrophes) in the web app. They show:
+
+- beside the Pet's name on its screen ("Pip (she/her)  Lv 2");
+- on the Pet's **pronoun pin**, if it wears one: a little badge on its chest with them in capitals (THEY/THEM), on the
+  Pet screen, in dress-up, in Meet and on friends' lists, and in the web app and on the website;
+- on its name tag when it meets other Pets, and in their friends lists (Meet carries them);
+- on the household's **Roommates**, on every roommate's X4 and in the web app (the member card carries them, so they
+  reach everyone at the next Sync).
 
 ### Gifts
 

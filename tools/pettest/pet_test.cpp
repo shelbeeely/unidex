@@ -1,8 +1,10 @@
-// Checks Pet's parts and saved look on a computer (no board needed):
-//   c++ -std=c++17 -O2 -I src/apps/pet tools/pettest/pet_test.cpp -o /tmp/pet_test && /tmp/pet_test
+// Checks Pet's parts and saved look on a computer (no board needed), as the X4 (RoomiePet) builds them;
+// pet_waveshare_test.cpp runs the same checks as the Waveshare board builds them:
+//   c++ -std=c++17 -O2 -DUNIDEX_X4=1 -I src/apps/pet tools/pettest/pet_test.cpp -o /tmp/pet_test && /tmp/pet_test
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <initializer_list>
 #include "pet_logic.h"
 
 using namespace pet;
@@ -40,7 +42,7 @@ int main() {
   bool partsOk = true, fits = true;
   for (int layer = 0; layer < LAYERS; layer++) {
     const LayerParts lp = partsOf(layer);
-    fits &= lp.count >= 1 && lp.count <= 16;  // 4 bits a layer
+    fits &= lp.count >= 1 && lp.count <= 1 << LAYER_BITS[layer];
     for (int i = 0; i < lp.count; i++)
       if (!partOk(lp.parts[i])) {
         printf("       bad part: %s %d (%s)\n", LAYER_NAMES[layer], i, lp.parts[i].name ? lp.parts[i].name : "?");
@@ -48,7 +50,15 @@ int main() {
       }
   }
   check(partsOk && partOk(EYES_CLOSED), "every part: a name of 1-10 characters, 32 rows of 32 '#', 'o' or '.'");
-  check(fits, "every layer has 1 to 16 parts, so it fits in 4 bits");
+  check(fits, "every layer's parts fit in its bits");
+  int bits = 0;
+  for (int layer = 0; layer < LAYERS; layer++) bits += LAYER_BITS[layer];
+  check(bits <= 32, "a look fits in 32 bits");
+  bool waveshareSame = true;
+  for (int layer = 0; layer < LAYERS; layer++)
+    waveshareSame &= partsOfAll(layer).count >= WAVESHARE_PARTS[layer] &&
+                     partsOf(layer).count == (UNIDEX_X4 ? partsOfAll(layer).count : WAVESHARE_PARTS[layer]);
+  check(waveshareSame, UNIDEX_X4 ? "the X4 has every part" : "the Waveshare board keeps only the parts it shipped with");
   check(blank(HATS[0]) && blank(EXTRAS[0]), "the first hat and extra are 'None' (nothing drawn)");
   check(strcmp(EYES[HAPPY_EYES].name, "Happy") == 0, "HAPPY_EYES points at the Happy eyes");
   check(!blank(BODIES[0]) && !blank(EYES[0]) && !blank(MOUTHS[0]), "the default body, eyes and mouth draw something");
@@ -66,7 +76,8 @@ int main() {
   const Look bad = unpack(0xFFFFFFFF);
   bool fellBack = true;
   for (int layer = 0; layer < LAYERS; layer++)
-    fellBack &= bad.part[layer] == (partsOf(layer).count == 16 ? 15 : DEFAULT_LOOK.part[layer]);
+    fellBack &= bad.part[layer] == (partsOf(layer).count == 1 << LAYER_BITS[layer] ? partsOf(layer).count - 1
+                                                                                   : DEFAULT_LOOK.part[layer]);
   check(fellBack, "a damaged saved value falls back to the default part per layer");
   check(memcmp(unpack(pack(DEFAULT_LOOK)).part, DEFAULT_LOOK.part, LAYERS) == 0, "the default look round-trips");
 
@@ -167,27 +178,64 @@ int main() {
   check(noDupes && giftsOwned(all) == DROP_COUNT && rolls == DROP_COUNT, "a sure gift each time: no duplicates, all found");
   check(rollDrop(dry, all, 0, 0, 0) == nullptr, "nothing drops once a Pet has everything");
   Owned onlyLegendaryLeft = all;
-  onlyLegendaryLeft.layer[HAT] &= ~(1 << 13);
+  onlyLegendaryLeft.layer[HAT] &= ~(1u << 13);
   const Drop *last = rollDrop(dry, onlyLegendaryLeft, 0, 99, 0);
   check(last && last->layer == HAT && last->part == 13, "an uncommon roll with only a legendary left gives that");
 
-  // Styles and the new layers.
-  bool stylesOk = true;
-  for (const Style &st : STYLES)
-    for (int i = 0; i < LAYERS; i++) stylesOk &= st.part[i] < partsOf(i).count;
-  check(stylesOk, "every style's parts exist");
-  const Look femboy = applyStyle(DEFAULT_LOOK, STYLES[0], none);
-  check(strcmp(HAIRS[femboy.part[HAIR]].name, "Fluffy bob") == 0 && strcmp(OUTFITS[femboy.part[OUTFIT]].name, "Skirt") == 0 &&
-            strcmp(HATS[femboy.part[HAT]].name, "Cat ears") == 0,
-        "the femboy style: fluffy bob, skirt, cat ears (all free)");
-  const Look goth = applyStyle(DEFAULT_LOOK, STYLES[4], none);
-  check(goth.part[OUTFIT] == DEFAULT_LOOK.part[OUTFIT] && strcmp(HAIRS[goth.part[HAIR]].name, "Long") == 0,
-        "the goth style without gifts: long hair now, the corset once it drops");
-  check(applyStyle(DEFAULT_LOOK, STYLES[4], all).part[OUTFIT] == 6, "and with every gift, the corset");
-  Look old = DEFAULT_LOOK;
-  old.part[HAIR] = 5, old.part[OUTFIT] = 9;
-  check(unpack(pack(old) & 0xFFFFF).part[HAIR] == 0 && unpack(pack(old)).part[OUTFIT] == 9,
-        "a look from before hair and outfits (5 layers) has none; a full one keeps them");
+  bool dropsInRange = true;
+  for (const Drop &d : DROPS) dropsInRange &= d.part < partsOf(d.layer).count;
+  check(dropsInRange, "every gift exists in this build");
+  bool randomOk = true;
+  uint32_t r2 = 7;
+  for (int i = 0; i < 500; i++) {
+    const Look r = randomOwned([&] { return r2 = r2 * 1664525u + 1013904223u; }, none);
+    for (int layer = 0; layer < LAYERS; layer++) randomOk &= owns(none, layer, r.part[layer]);
+  }
+  check(randomOk, "a random look uses only what the Pet owns");
+
+  // Pronouns and the pin.
+  char pr[pronouns::MAX + 1];
+  pronouns::clean("  She/Her ", pr);
+  check(strcmp(pr, "she/her") == 0, "pronouns are lowercased and trimmed");
+  pronouns::clean("they/them!!1  and more", pr);
+  check(strcmp(pr, "they/them an") == 0, "anything else is dropped, and it stops at 12 characters");
+  bool packsOk = true;
+  for (const char *p : pronouns::PRESETS) {
+    uint32_t b, c;
+    pronouns::pack(p, b, c);
+    char back[pronouns::MAX + 1];
+    pronouns::unpack(b, c, back);
+    packsOk &= strcmp(back, p) == 0;
+  }
+  uint32_t b12, c12;
+  pronouns::pack("abcdefghijkl", b12, c12);
+  pronouns::unpack(b12, c12, pr);
+  check(packsOk && strcmp(pr, "abcdefghijkl") == 0, "pronouns survive packing into two numbers (the member card)");
+  bool glyphsOk = true;
+  for (const char *g : pronouns::GLYPHS) glyphsOk &= strlen(g) == 15;
+  check(glyphsOk && sizeof pronouns::GLYPHS / sizeof *pronouns::GLYPHS == sizeof pronouns::CHARS - 1,
+        "a 3x5 letter for every pronoun character");
+  pronouns::pinText("they/them", pr);
+  check(strcmp(pr, "THEY/THEM") == 0, "the pin says THEY/THEM");
+  int minX = 99, maxX = -1, minY = 99, maxY = -1, inks = 0;
+  pronouns::drawPin("they/them", [&](int x, int y, bool ink) {
+    minX = x < minX ? x : minX, maxX = x > maxX ? x : maxX, minY = y < minY ? y : minY, maxY = y > maxY ? y : maxY;
+    inks += ink;
+  });
+  check(minX >= 0 && maxX < 64 && minY >= 48 && maxY < 64 && inks > 40, "the pin fits on the chest of the 64x64 grid");
+  int any = 0;
+  pronouns::drawPin("", [&](int, int, bool) { any++; });
+  check(any == 0, "no pronouns, no pin");
+  Look pinned = DEFAULT_LOOK;
+  pinned.pin = true;
+  check(unpack(pack(pinned)).pin == (bool)UNIDEX_X4 && !unpack(pack(DEFAULT_LOOK)).pin,
+        UNIDEX_X4 ? "the pin is saved with the look (the top bit)" : "the Waveshare board has no pin");
+#if UNIDEX_X4
+  check(strcmp(OUTFITS[22].name, "Suit") == 0 && strcmp(HATS[23].name, "Tiara") == 0 && strcmp(EXTRAS[30].name, "Carrot") == 0 &&
+            strcmp(OUTFITS[13].name, "Maid dress") == 0 && strcmp(EXTRAS[25].name, "Spider") == 0,
+        "the X4's gifts point at the right parts");
+  check(strcmp(LAYER_NAMES[EXTRA], "Accessory") == 0, "the X4 calls extras accessories");
+#endif
   check(DRAW_ORDER[1] == OUTFIT && DRAW_ORDER[4] == HAIR && DRAW_ORDER[5] == HAT, "clothes under the face, hair under hats");
 
   check(levelOf(0) == 1 && levelOf(49) == 1 && levelOf(50) == 2, "levels every 50 EXP");

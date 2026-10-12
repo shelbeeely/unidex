@@ -40,6 +40,26 @@ canvas.prev{width:200px;height:200px;image-rendering:pixelated;border:1px solid 
 #sheet input{width:100%;margin:8px 0}
 .connect{text-align:center;padding:40px 10px}.connect p{max-width:460px;margin:8px auto}
 .err{color:var(--bad)}
+.designer{display:grid;grid-template-columns:auto 1fr;gap:18px;align-items:start}
+@media (max-width:620px){.designer{grid-template-columns:1fr}}
+.stage{display:flex;flex-direction:column;gap:8px;align-items:stretch;width:240px;max-width:100%;margin:0 auto}
+.frame{background:#c9c9c4;padding:8px;border-radius:10px;line-height:0}
+.frame canvas{width:100%;aspect-ratio:1;image-rendering:pixelated;background:#fff;border-radius:4px}
+.stage .nm{display:flex;flex-direction:column;font-size:13px;color:var(--muted);gap:3px}
+.stage .nm input{min-width:0}
+.petRow{display:grid;grid-template-columns:96px 40px 1fr 40px;align-items:center;gap:6px;margin-bottom:6px}
+.petRow span{text-align:center;font-size:15px}.petRow small{display:block;color:var(--muted);font-size:12px}
+.petRow .lab{padding:7px 8px;text-align:left}.petRow.on .lab{border-color:var(--ink);font-weight:600}
+.petRow button{padding:7px 0}
+.rar{font-style:normal;font-size:11px;padding:0 6px;border-radius:999px;border:1px solid var(--ink);white-space:nowrap}
+.rar.r2{background:var(--ink);color:var(--paper)}.rar.r3{background:linear-gradient(90deg,#7c3aed,#db2777);color:#fff;border-color:transparent}
+.strip{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:8px}
+.tile{font:inherit;font-size:12px;border:1px solid var(--line);background:var(--paper);color:var(--ink);border-radius:10px;padding:6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px}
+.tile canvas{width:64px;height:64px;image-rendering:pixelated}
+.tile.on{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}.tile.locked{opacity:.45}
+.stage .check{display:flex;gap:8px;align-items:center;font-size:14px}
+.pr{font-weight:400;color:var(--muted)}
+canvas.mini{width:56px;height:56px;image-rendering:pixelated;border:1px solid var(--line);border-radius:8px;background:#fff}
 </style>
 </head>
 <body>

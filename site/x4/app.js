@@ -6,7 +6,8 @@
 // WebAssembly. Every change re-reads the household from the X4 first, makes the change as the X4 itself would, and
 // sends back only the records that changed, which the X4 merges as at a Sync.
 
-import { LAYERS as ART, DRAW_ORDER } from './pet-art.js';
+import { LAYERS as ART, DRAW_ORDER, BITS, PRONOUNS } from './pet-art.js';
+import { drawPin, cleanPronouns } from './pin.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
@@ -188,7 +189,7 @@ const ordinal = n => n + (n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !=
 
 // ---- Views
 
-const TABS = [['home', 'Home'], ['chores', 'Chores'], ['shopping', 'Shopping'], ['money', 'Money'],
+const TABS = [['home', 'Home'], ['pet', 'Pet'], ['chores', 'Chores'], ['shopping', 'Shopping'], ['money', 'Money'],
   ['reminders', 'Reminders'], ['messages', 'Messages'], ['roommates', 'Roommates'], ['badges', 'Badges'],
   ['timetable', 'Timetable'], ['settings', 'Settings']];
 let tab = 'home';
@@ -196,7 +197,8 @@ let tab = 'home';
 function render() {
   $('tabs').innerHTML = TABS.map(([k, n]) => `<button data-tab="${k}" class="${k === tab ? 'on' : ''}">${n}</button>`).join('');
   const view = VIEWS[tab];
-  $('main').innerHTML = S && !S.id && !['badges', 'timetable', 'settings'].includes(tab) ? noHouse() : view();
+  $('main').innerHTML = S && !S.id && !['pet', 'badges', 'timetable', 'settings'].includes(tab) ? noHouse() : view();
+  paintPets();
 }
 
 function noHouse() {
@@ -205,6 +207,7 @@ function noHouse() {
 }
 
 const VIEWS = {
+  pet: () => designer(),
   home() {
     const t = today().day, mine = recs(KIND.CHORE).filter(c => c.turn === S.me && c.b <= t);
     const late = recs(KIND.CHORE).filter(c => c.overdue);
@@ -297,7 +300,8 @@ const VIEWS = {
     return `<h2>Roommates</h2>
       ${S.members.map(m => {
         const link = m.id !== S.me && payLink(m, 0, S.me);
-        return `<div class="card"><div class="row"><div class="grow"><div class="title">${esc(m.name)}${m.id === S.me ? ' (you)' : ''}</div>
+        return `<div class="card"><div class="row"><canvas class="mini" data-look="${m.look}" data-pronouns="${esc(m.pronouns || '')}" width="96" height="96"></canvas>
+          <div class="grow"><div class="title">${withPronouns(m.name, m.pronouns)}${m.id === S.me ? ' · you' : ''}</div>
           <div class="sub">${m.tag ? '$' + esc(m.tag) : 'No $cashtag'} · ${m.balance > 0 ? 'owed ' + money(m.balance) : m.balance < 0 ? 'owes ' + money(-m.balance) : 'even'}</div></div>
           ${link ? `<a class="b cash" href="${esc(link.url)}">Cash App</a><button class="b" data-act="shareMember" data-id="${m.id}">Share</button>` : ''}</div></div>`;
       }).join('')}
@@ -330,9 +334,6 @@ const VIEWS = {
   settings() {
     const s = info.settings;
     return `<h2>Settings</h2>
-      <div class="card"><div class="title">Your Pet</div><form class="add" data-form="petName">
-        <label>Name<input type="text" name="name" maxlength="12" value="${esc(info.pet.name || '')}"></label><button class="b p">Save</button></form></div>
-      ${dressUp()}
       <div class="card"><div class="title">The X4</div>
         <form class="add" data-form="settings"><label>Sleep after<select name="sleep">${[10, 20, 30, 60].map(v =>
           `<option value="${v}"${+s.sleep === v ? ' selected' : ''}>${v} s</option>`).join('')}</select></label>
@@ -346,15 +347,32 @@ const VIEWS = {
   },
 };
 
-// ---- Dress-up: one choice per layer, a preview drawn from the same art as the X4 (pet-art.js, generated from the
-// firmware's parts), and whole styles in one tap. Gifts not found yet (they drop after chores) are shown locked.
+// ---- The Pet designer (the Pet tab): the website's Tools page designer, for the X4. One row per layer with
+// previous and next, a preview drawn from the same art as the X4 (pet-art.js, generated from the firmware's parts),
+// a strip of every piece in the layer you're on, the name, the pronouns and the pronoun pin, and Wear it. Gifts not
+// found yet (they drop after chores) are skipped, and shown locked in the strip.
 const LAYERS = ART.map(l => l.name);
-const lookParts = look => LAYERS.map((_, i) => (parseInt(look || '0', 16) >>> (4 * i)) & 15);
-const lookHex = parts => (parts.reduce((v, p, i) => v + (p & 15) * 16 ** i, 0)).toString(16).padStart(7, '0');
+const ROWS = [6, 5, 3, 4, 0, 1, 2];  // as on the X4: clothes first (Outfit, Hair, Hat, Accessory, Body, Eyes, Mouth)
+const SHIFT = BITS.map((_, i) => BITS.slice(0, i).reduce((a, b) => a + b, 0));
+const PIN = 2 ** 31;  // the top bit of a saved look: it wears its pronoun pin
+const lookParts = hex => { const v = parseInt(hex || '0', 16) || 0; return BITS.map((b, i) => Math.floor(v / 2 ** SHIFT[i]) % 2 ** b); };
+const lookPin = hex => (parseInt(hex || '0', 16) || 0) >= PIN;
+const lookHex = (parts, pin) => (parts.reduce((v, p, i) => v + p * 2 ** SHIFT[i], 0) + (pin ? PIN : 0)).toString(16).padStart(8, '0');
 const RARITY = ['starter', 'uncommon', 'rare', 'legendary'];
-const owned = (layer, index) => { const p = info.parts.find(x => x.layer === layer && x.index === index); return !p || p.owned; };
+const partInfo = (layer, index) => info.parts.find(x => x.layer === layer && x.index === index);
+const owned = (layer, index) => { const p = partInfo(layer, index); return !p || p.owned; };
+const offered = layer => ART[layer].parts.map((_, i) => i).filter(i => owned(layer, i));
+// What's being designed: the parts, the pin, the name, the pronouns and the layer shown in the strip. Starts as what
+// the X4 wears; Load puts that back.
+const design = { parts: null, pin: false, name: '', pronouns: '', strip: 6 };
+function loadDesign() {
+  design.parts = lookParts(info.pet.look).map((p, i) => (p < ART[i].parts.length ? p : 0));
+  design.pin = lookPin(info.pet.look);
+  design.name = info.pet.name || '';
+  design.pronouns = info.pet.pronouns || '';
+}
 
-function drawPet(canvas, parts) {
+function drawPet(canvas, parts, pin, pronouns) {
   const ctx = canvas.getContext('2d'), s = canvas.width / 32;
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -366,38 +384,102 @@ function drawPet(canvas, parts) {
       ctx.fillRect(x * s, y * s, s, s);
     }));
   }
+  if (pin) drawPin(ctx, pronouns, s);
+}
+// Name with pronouns after it, as the X4 shows it: "Pip (she/her)".
+const withPronouns = (name, pronouns) => esc(name) + (pronouns ? ` <span class="pr">(${esc(pronouns)})</span>` : '');
+
+function designer() {
+  if (!design.parts) loadDesign();
+  const d = design, level = 1 + Math.floor(info.exp / 50);
+  const rows = ROWS.map(layer => {
+    const list = offered(layer), at = list.indexOf(d.parts[layer]), p = ART[layer].parts[d.parts[layer]];
+    const r = partInfo(layer, d.parts[layer])?.rarity;
+    return `<div class="petRow${layer === d.strip ? ' on' : ''}"><button class="b lab" data-act="pStrip" data-l="${layer}">${LAYERS[layer]}</button>
+      <button class="b" data-act="pStep" data-l="${layer}" data-s="-1" aria-label="Previous ${LAYERS[layer]}">◀</button>
+      <span>${esc(p.name)}${r ? ` <i class="rar r${r}">${RARITY[r]}</i>` : ''}<small>${at + 1}/${list.length}</small></span>
+      <button class="b" data-act="pStep" data-l="${layer}" data-s="1" aria-label="Next ${LAYERS[layer]}">▶</button></div>`;
+  }).join('');
+  const strip = ART[d.strip].parts.map((p, i) => {
+    const r = partInfo(d.strip, i)?.rarity, has = owned(d.strip, i);
+    return `<button class="tile${i === d.parts[d.strip] ? ' on' : ''}${has ? '' : ' locked'}" data-act="pPick" data-l="${d.strip}" data-i="${i}"
+      ${has ? '' : 'disabled'} title="${esc(p.name)}${r ? ' (' + RARITY[r] + (has ? '' : ', not found yet') + ')' : ''}"><canvas data-tile="${i}" width="64" height="64"></canvas>
+      <span>${esc(p.name)}</span>${r ? `<i class="rar r${r}">${has ? RARITY[r] : 'not found yet'}</i>` : ''}</button>`;
+  }).join('');
+  const preset = PRONOUNS.includes(d.pronouns) || !d.pronouns;
+  return `<h2>Your Pet</h2>
+    <p class="note">Dress it up and send it to the X4. Level ${level} · ${info.gifts} of ${info.giftsAll} gifts
+      found${info.gifts < info.giftsAll ? ': more drop after chores, like loot' : ''}.</p>
+    <div class="designer">
+      <div class="stage"><div class="frame"><canvas id="petPreview" width="256" height="256" role="img" aria-label="Pet preview"></canvas></div>
+        <label class="nm">Name<input id="petName" type="text" maxlength="12" placeholder="No name" value="${esc(d.name)}" autocomplete="off"></label>
+        <label class="nm">Pronouns<select id="petPronouns"><option value="">None</option>${PRONOUNS.map(p =>
+          `<option${p === d.pronouns ? ' selected' : ''}>${esc(p)}</option>`).join('')}<option value="*"${preset ? '' : ' selected'}>Other...</option></select></label>
+        <input id="petPronounsOther" type="text" maxlength="12" placeholder="Your pronouns" value="${preset ? '' : esc(d.pronouns)}"
+          autocomplete="off" ${preset ? 'hidden' : ''} aria-label="Your pronouns">
+        <label class="check"><input id="petPin" type="checkbox"${d.pin ? ' checked' : ''}> Wear a pronoun pin</label>
+        <button class="b p" data-act="pWear">Wear it on the X4</button>
+        <button class="b" data-act="pRandom">Random look</button>
+        <button class="b" data-act="pLoad">Load from the X4</button></div>
+      <div class="rows">${rows}</div>
+    </div>
+    <p class="note">Your pronouns show beside your Pet's name on the X4, to Pets you meet and their friends lists, and on
+      your household's Roommates; the pin shows them on your Pet too.</p>
+    <h3>${LAYERS[d.strip]}</h3>
+    <div class="strip">${strip}</div>`;
 }
 
-// A style on top of `parts`: its gifts not found yet stay as they are (as on the X4).
-const withStyle = (parts, style) => parts.map((p, i) => (style.parts[i] >= 0 && owned(i, style.parts[i]) ? style.parts[i] : p));
-
-function dressUp() {
-  const parts = lookParts(info.pet.look), level = 1 + Math.floor(info.exp / 50);
-  return `<div class="card"><div class="row"><div class="title">Dress up</div><span class="sub">Level ${level} · ${info.gifts} of ${info.giftsAll} gifts found</span></div>
-    <p class="note">${info.gifts < info.giftsAll ? 'Gifts drop after chores, like loot: more often for a chore done on time, on a roommate\'s turn or when it was late, and on a streak of days.' : 'Every gift found!'}</p>
-    <div class="row" style="align-items:flex-start"><canvas id="petPreview" class="prev" width="192" height="192" style="width:160px;height:160px"></canvas>
-    <div class="grow"><div class="sub" style="margin-bottom:6px">Styles</div>${info.styles.map((st, i) =>
-      `<button class="b" data-act="style" data-i="${i}" style="margin:0 6px 6px 0">${esc(st.name)}</button>`).join('')}</div></div>
-    <form class="add" data-form="look">${LAYERS.map((name, layer) => `<label>${name}<select name="l${layer}">${info.parts
-      .filter(p => p.layer === layer).map(p => `<option value="${p.index}"${p.index === parts[layer] ? ' selected' : ''}${p.owned ? '' : ' disabled'}>${esc(p.name)}${p.rarity ? ' (' + RARITY[p.rarity] + (p.owned ? '' : ', not found yet') + ')' : ''}</option>`).join('')}</select></label>`).join('')}
-      <button class="b p">Wear it</button></form></div>`;
+// Every Pet on the page: the designer's preview and strip, and the roommates' Pets (canvas[data-look]).
+function paintPets() {
+  const c = $('petPreview');
+  if (c) drawPet(c, design.parts, design.pin, design.pronouns);
+  document.querySelectorAll('canvas[data-tile]').forEach(t => {
+    const parts = [...design.parts];
+    parts[design.strip] = +t.dataset.tile;
+    drawPet(t, parts, false, '');
+  });
+  document.querySelectorAll('canvas[data-look]').forEach(t => {
+    const hex = (+t.dataset.look >>> 0).toString(16);
+    drawPet(t, lookParts(hex), lookPin(hex), t.dataset.pronouns || '');
+  });
 }
+document.addEventListener('input', e => {
+  if (e.target.id === 'petName') design.name = e.target.value;
+  if (e.target.id === 'petPronounsOther') { design.pronouns = cleanPronouns(e.target.value); paintPets(); }
+});
+document.addEventListener('change', e => {
+  if (e.target.id === 'petPin') { design.pin = e.target.checked; paintPets(); }
+  if (e.target.id === 'petPronouns') {
+    const other = e.target.value === '*';
+    $('petPronounsOther').hidden = !other;
+    design.pronouns = other ? cleanPronouns($('petPronounsOther').value) : e.target.value;
+    if (other) $('petPronounsOther').focus();
+    paintPets();
+  }
+});
 
-// The parts chosen in the form right now, and the preview kept up with them.
-const formParts = f => LAYERS.map((_, i) => +f['l' + i].value);
-function refreshPreview() {
-  const f = document.querySelector('form[data-form=look]'), c = $('petPreview');
-  if (f && c) drawPet(c, formParts(f));
-}
-document.addEventListener('change', e => { if (e.target.closest('form[data-form=look]')) refreshPreview(); });
-new MutationObserver(refreshPreview).observe(document.body, { childList: true, subtree: true });
-
-async function setLook(parts) {
-  ok(await run(`P SET ${lookHex(parts)} ${toHex(enc.encode(info.pet.name || ''))}`), 'OK P SET');
-  await readExtras();
-  render();
-  toast('Your Pet is wearing it (the X4 shows it on the Pet screen)');
-}
+const PET_ACTIONS = {
+  pStep: d => {
+    const layer = +d.l, list = offered(layer);
+    const at = list.indexOf(design.parts[layer]);
+    design.parts[layer] = list[((at < 0 ? 0 : at + +d.s) + list.length) % list.length];
+    design.strip = layer;
+  },
+  pPick: d => { design.parts[+d.l] = +d.i; },
+  pStrip: d => { design.strip = +d.l; },
+  pRandom: () => { design.parts = design.parts.map((_, layer) => { const l = offered(layer); return l[Math.floor(Math.random() * l.length)]; }); },
+  pLoad: async () => { await readExtras(); loadDesign(); toast('Loaded what your Pet is wearing'); },
+  pWear: async () => {
+    const name = design.name.replace(/[^\x20-\x7e]/g, '').trim().slice(0, 12), pr = cleanPronouns(design.pronouns);
+    const hex = t => (t ? toHex(enc.encode(t)) : '-');
+    ok(await run(`P SET ${lookHex(design.parts, design.pin)} ${hex(name)} ${hex(pr)}`), 'OK P SET');
+    await readExtras();
+    await readHouse();  // its member card (name, look, pronouns), as roommates will see it
+    loadDesign();
+    toast(name ? `${name} is wearing it (on the X4's Pet screen)` : 'Your Pet is wearing it (on the X4\'s Pet screen)');
+  },
+};
+for (const [k, fn] of Object.entries(PET_ACTIONS)) PET_ACTIONS[k] = async d => { await fn(d); render(); };
 
 // The way to pay member `m`: their request for `payer` (pasted on their phone or here) or their $cashtag link.
 function payLink(m, pence, payer) {
@@ -484,13 +566,6 @@ const ACTIONS = {
     ok(await run('W ' + lines.length + ' ' + c, ...lines), 'OK W');
     toast('Timetable saved');
   },
-  style: d => {  // put the style in the form (and the preview); "Wear it" sends it
-    const f = document.querySelector('form[data-form=look]');
-    withStyle(formParts(f), info.styles[+d.i]).forEach((p, i) => (f['l' + i].value = p));
-    refreshPreview();
-    const missing = info.styles[+d.i].parts.filter((p, i) => p >= 0 && !owned(i, p)).length;
-    toast(missing ? `${info.styles[+d.i].name}: ${missing} gift${missing > 1 ? 's' : ''} not found yet` : `${info.styles[+d.i].name}: press Wear it`);
-  },
   setTime: async () => { ok(await run('T ' + Math.floor(Date.now() / 1000)), 'OK T'); await readExtras(); render(); toast('Clock set'); },
 };
 
@@ -522,12 +597,6 @@ const FORMS = {
     if (tag && !wasm.valid_cashtag()) return toast('1-20 letters, digits, _ or -, with a letter in it');
     return change(() => (putText(tag), wasm.set_paytag()), tag ? 'Saved' : 'Removed');
   },
-  petName: async f => {
-    const name = f.name.value.trim().replace(/[^\x20-\x7e]/g, '').slice(0, 12);
-    ok(await run(`P SET ${info.pet.look} ${toHex(enc.encode(name))}`), 'OK P SET');
-    await readExtras(); render(); toast('Saved');
-  },
-  look: f => setLook(formParts(f)),
   settings: async f => {
     ok(await run('G SET sleep ' + f.sleep.value, 'G SET invert ' + f.invert.value));
     await readExtras(); render(); toast('Saved');
@@ -579,14 +648,11 @@ async function readExtras() {
     return { layer: +layer, index: +index, rarity: +rarity, owned: has === '1', name: fromHex(name) };
   });
   [info.exp, info.gifts, info.giftsAll] = (reply(r, 'OK P PARTS ') || '').split(' ').slice(3).map(Number).concat([0, 0, 0]);
-  info.styles = r.filter(l => l.startsWith('PS ')).map(l => {
-    const [, , name, parts] = l.split(' ');
-    return { name: fromHex(name), parts: parts.split(',').map(Number) };
-  });
+
   const g = reply(r, 'OK G ');
   info.settings = Object.fromEntries((g ? g.slice(5) : '').split(' ').map(kv => kv.split('=')));
   const p = (reply(r, 'OK P ') || 'OK P 0 ').split(' ');
-  info.pet = { look: p[2], name: fromHex(p[3] || '') };
+  info.pet = { look: p[2], name: fromHex(p[3] || ''), pronouns: fromHex(p[4] || '') };
   info.badges = r.filter(l => l.startsWith('F ')).map(l => l.slice(2));
   info.timetable = r.filter(l => l.startsWith('WL ')).map(l => l.slice(3).split(',').slice(0, 5));
 }
@@ -597,7 +663,7 @@ document.addEventListener('click', async e => {
   const t = e.target.closest('[data-tab],[data-act]');
   if (!t) return;
   if (t.dataset.tab) { tab = t.dataset.tab; render(); return; }
-  try { await ACTIONS[t.dataset.act]?.(t.dataset); } catch (x) { toast(x.message || String(x), 4000); }
+  try { await (ACTIONS[t.dataset.act] || PET_ACTIONS[t.dataset.act])?.(t.dataset); } catch (x) { toast(x.message || String(x), 4000); }
 });
 document.addEventListener('submit', async e => {
   const f = e.target.closest('form[data-form]');

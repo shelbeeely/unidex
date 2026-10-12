@@ -40,6 +40,12 @@ int main() {
   bad[3] = 1;
   check(!decodeHello(bad, n, out) && typeOf(bad, n) == 0, "an older protocol version is ignored");
   check(memcmp(p, "RPM", 3) == 0, "a RoomiePet's packets start RPM");
+  Hello withPr = hello(77, "Pip"), backPr;
+  strcpy(withPr.pronouns, "they/them");
+  n = encodeHello(withPr, p);
+  check(n <= 250 && decodeHello(p, n, backPr) && strcmp(backPr.pronouns, "they/them") == 0 && strcmp(backPr.name, "Pip") == 0,
+        "a HELLO carries the owner's pronouns");
+  n = encodeHello(in, p);
   memcpy(bad, p, n);
   memcpy(bad, UNIDEX_MAGIC, 3);
   check(!decodeHello(bad, n, out) && typeOf(bad, n) == 0, "a unidex's Pet is never heard: RoomiePets only meet RoomiePets");

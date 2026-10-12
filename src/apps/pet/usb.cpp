@@ -1,6 +1,7 @@
 #include "../../core/usbsync.h"
 #include "pet.h"
 #include "pet_logic.h"
+#include "../house/house.h"
 #include "../../core/storage.h"
 
 static const size_t MAX_NAME = 12;
@@ -29,16 +30,23 @@ bool petUsb(const char *line) {
   if (strncmp(line, "P ", 2) != 0) return false;
   const char *cmd = line + 2;
   if (strcmp(cmd, "GET") == 0) {
-    usbOut().printf("OK P %07lx ", (unsigned long)petLookBits());  // 7 layers (the website's designer reads 5)
+    usbOut().printf(UNIDEX_X4 ? "OK P %08lx " : "OK P %07lx ", (unsigned long)petLookBits());
     for (const char c : petName()) usbOut().printf("%02x", (uint8_t)c);
+#if UNIDEX_X4
+    usbOut().print(' ');
+    for (const char c : petPronouns()) usbOut().printf("%02x", (uint8_t)c);
+#endif
     usbOut().print('\n');
   } else if (strncmp(cmd, "SET ", 4) == 0) {
-    char lookHex[12] = "", nameHex[2 * MAX_NAME + 2] = "";
-    String name;
+    // "-" for no name (or no pronouns), so the pronouns after an empty name aren't taken for the name.
+    char lookHex[12] = "", nameHex[2 * MAX_NAME + 2] = "", pronounsHex[2 * pronouns::MAX + 2] = "";
+    String name, said;
     char *end;
-    const int n = sscanf(cmd + 4, "%11s %25s", lookHex, nameHex);
+    const int n = sscanf(cmd + 4, "%11s %25s %25s", lookHex, nameHex, pronounsHex);
     const unsigned long look = strtoul(lookHex, &end, 16);
-    if (n < 1 || *end || !nameFromHex(n > 1 ? nameHex : "", name)) {
+    if (strcmp(nameHex, "-") == 0) nameHex[0] = 0;
+    if (strcmp(pronounsHex, "-") == 0) pronounsHex[0] = 0;
+    if (n < 1 || *end || !nameFromHex(n > 1 ? nameHex : "", name) || !nameFromHex(pronounsHex, said)) {
       usbOut().println("ERR");
       return true;
     }
@@ -48,6 +56,15 @@ bool petUsb(const char *line) {
     storagePutInt("pet_look", pet::pack(pet::onlyOwned(pet::unpack(look), owned)));
     if (name.length()) storagePutString("pet_name", name.c_str());
     else storageRemoveKey("pet_name");
+#if UNIDEX_X4
+    if (n > 2) {  // pronouns, cleaned (pronouns.h); without the third word they stay as they are
+      char clean[pronouns::MAX + 1];
+      pronouns::clean(said.c_str(), clean);
+      if (*clean) storagePutString("pet_pronouns", clean);
+      else storageRemoveKey("pet_pronouns");
+    }
+    houseUpdateMe();  // the household's member card takes the new name, look and pronouns
+#endif
     petChanged();
     usbOut().println("OK P SET");
   } else if (strcmp(cmd, "PARTS") == 0) {
@@ -61,13 +78,6 @@ bool petUsb(const char *line) {
         for (const char *c = lp.parts[i].name; *c; c++) usbOut().printf("%02x", (uint8_t)*c);
         usbOut().print('\n');
       }
-    }
-    // The styles: "PS <index> <hex name> <part per layer, -1 keep, comma-separated>".
-    for (int i = 0; i < pet::STYLE_COUNT; i++) {
-      usbOut().printf("PS %d ", i);
-      for (const char *c = pet::STYLES[i].name; *c; c++) usbOut().printf("%02x", (uint8_t)*c);
-      for (int l = 0; l < pet::LAYERS; l++) usbOut().printf("%c%d", l ? ',' : ' ', pet::STYLES[i].part[l]);
-      usbOut().print('\n');
     }
     usbOut().printf("OK P PARTS %lu %d %d\n", (unsigned long)petExp(), pet::giftsOwned(owned), pet::DROP_COUNT);
   } else {

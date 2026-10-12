@@ -264,6 +264,9 @@ static void drawList() {
     else if (screen == REMINDER_LIST) scheduleText(r, right, sizeof right);
     else if (screen == MESSAGE_LIST) snprintf(left, sizeof left, "%s: %s", nameOf(h, r.origin), r.text);
     else if (screen == ROOMMATES) {
+      char pr[pronouns::MAX + 1];
+      pronounsOf(r, pr);
+      if (*pr) snprintf(left, sizeof left, "%s (%s)", r.text, pr);
       const char *tag = payTagOf(h, r.origin);
       snprintf(right, sizeof right, "%s%s%s%s", r.origin == h.me ? "you" : "", r.origin == h.me && tag ? ", " : "",
                tag ? "$" : "", tag ? tag : "");

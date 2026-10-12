@@ -2,7 +2,7 @@
 
 Manage a RoomiePet (an Xteink X4) from a browser: the household (chores, shopping, money, reminders, Pet messages,
 roommates), Cash App (your $cashtag, pay or share for each debt, paste a Cash App request), badges, the timetable
-and settings. One app (`site/x4/`), two ways to reach the X4:
+and settings, and the **Pet designer** (dress-up with a live preview, pronouns and the pronoun pin). One app (`site/x4/`), two ways to reach the X4:
 
 | | On a phone (or any browser) | On a computer |
 |---|---|---|
@@ -44,7 +44,7 @@ when you leave the X4's hotspot.
 |---|---|
 | `H DUMP`, `H PUT <hex>`, `H SAVE`, `H START`, `H LEAVE` | The household (`src/apps/house/usb.h`) |
 | `G`, `G SET sleep <s>`, `G SET invert <0/1>` | Settings |
-| `P GET`, `P SET <look> <name hex>`, `P PARTS` | The Pet's name and look (7 hex digits, one per layer); every part with its rarity and whether this Pet has found it, the styles, the Pet's EXP and how many gifts it has found |
+| `P GET`, `P SET <look> <name hex> <pronouns hex>`, `P PARTS` | The Pet's look (8 hex digits: 3 bits for the body, 4 for eyes and mouth, 5 for each of the rest, and the top bit for the pronoun pin), name and pronouns (`-` for none); every part with its rarity and whether this Pet has found it, then the Pet's EXP and how many gifts it has found |
 | `T <unix>` | Set the clock from the phone or computer |
 | `L`, `B ...` + `D ...`, `BX <name>` | List, upload and delete badges |
 | `W GET`, `W <count> <crc32>` + lines | Read and replace the timetable |

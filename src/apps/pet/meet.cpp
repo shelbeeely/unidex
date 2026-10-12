@@ -135,11 +135,18 @@ static uint32_t clockNow() { return clockValid() ? (uint32_t)time(nullptr) : 0; 
 
 // A friend met (again): counted, look and name brought up to date, saved.
 static void meetFriend(const meet::Nearby &who) {
-  friendsList().meet(who.id, who.look, who.name, clockNow());
+  friendsList().meet(who.id, who.look, who.name, clockNow(), who.pronouns);
   saveFriends();
 }
 
 static bool isFriend(uint32_t id) { return friendsList().find(id) >= 0; }
+
+// A name tag's text: the name, with the pronouns after it when there are any ("Mochi (he/him)").
+static String tagText(const char *name, const char *pronouns) {
+  String t = name;
+  if (pronouns && *pronouns) t += t.length() ? String(" (") + pronouns + ")" : String(pronouns);
+  return t;
+}
 
 int meetFriendCount() { return friendsList().count; }
 
@@ -179,12 +186,13 @@ static void drawPet(int i, const meet::Actor &a, bool blink) {
   const int16_t sx = a.x - offset(), y = PY + a.dy, mid = sx + SIZE / 2;
   if (sx <= -SIZE || sx >= display.width()) return;
   const bool me = i == mine();
-  const String myName = petName();
+  const String myName = petName(), myPronouns = petPronouns();
   const char *name = me ? myName.c_str() : partner.name;
+  const char *pronouns = me ? myPronouns.c_str() : partner.pronouns;
   const PetMood mood = a.mood == meet::HAPPY ? PetMood::Happy : blink ? PetMood::Blink : PetMood::Normal;
-  petDraw(me ? petLookBits() : partner.look, SCALE, sx, y, mood);
+  petDraw(me ? petLookBits() : partner.look, SCALE, sx, y, mood, pronouns);
   if (mid < 0 || mid >= display.width()) return;
-  petDrawTag(name, mid, y - 3);
+  petDrawTag(tagText(name, pronouns).c_str(), mid, y - 3);
   if (a.bang) drawBang(sx + SIZE - 4, y - 24);
   if (a.heart) petDrawHeart(sx + SIZE + 2, y + 14, a.heart);
   if (a.bubble) {
@@ -459,6 +467,7 @@ static void sayHello() {
   h.id = myId();
   h.look = petLookBits();
   strlcpy(h.name, petName().c_str(), sizeof h.name);
+  strlcpy(h.pronouns, petPronouns().c_str(), sizeof h.pronouns);
   const int best = nearby.strongest();  // tell it how strongly it's heard here, so both can use both directions
   if (best >= 0) h.heard = meet::packHeard(nearby.at(best).id, nearby.median(best));
   uint8_t packet[meet::HELLO_LEN];
@@ -681,7 +690,10 @@ Redraw meetTick() {
     const int i = nearby.find(partner.id);
     if (i >= 0) {
       const bool look = nearby.at(i).look != partner.look || strcmp(nearby.at(i).name, partner.name);
-      if (look) memcpy(partner.name, nearby.at(i).name, sizeof partner.name), partner.look = nearby.at(i).look;
+      if (look) {
+        memcpy(partner.name, nearby.at(i).name, sizeof partner.name), partner.look = nearby.at(i).look;
+        memcpy(partner.pronouns, nearby.at(i).pronouns, sizeof partner.pronouns);
+      }
       changed = look;
     }
     if (i >= 0 && nearby.parted(i)) {
@@ -756,8 +768,13 @@ static void drawFriends() {
   display.setFont(FONT_TINY);
   drawCentered(when, CONTENT_TOP + 9);
   const int16_t x = (display.width() - SIZE) / 2;
+#if UNIDEX_X4
+  petDraw(f.look, SCALE, x, PY, PetMood::Normal, f.pronouns);
+  petDrawTag(tagText(f.name, f.pronouns).c_str(), x + SIZE / 2, PY - 3);
+#else
   petDraw(f.look, SCALE, x, PY);
   petDrawTag(f.name, x + SIZE / 2, PY - 3);
+#endif
   if (confirmRemove) {
     char title[32];
     snprintf(title, sizeof title, "Remove %s?", f.name[0] ? f.name : "this friend");

@@ -1,17 +1,29 @@
 #pragma once
-// Pet's look: one part per layer, saved as one number (4 bits a layer), and drawn from the 32x32 parts in
-// parts.h. No Arduino code, so it can be checked on a computer (tools/pettest).
-// Hair and Outfit (RoomiePet) came later: they take the next 8 bits, so a look saved before them (or sent by a
-// device or website that doesn't know them) simply has none, and devices that don't know them ignore them.
+// Pet's look: one part per layer, saved as one number, and drawn from the 32x32 parts in parts.h. No Arduino code,
+// so it can be checked on a computer (tools/pettest).
+// The Waveshare build (unidex) packs 4 bits a layer and keeps the parts it always had. The X4 build (RoomiePet) has
+// more hats, accessories, hair and outfits, so it packs 3 bits for the body, 4 for eyes and mouth and 5 for the
+// rest (31 bits); the top bit says the Pet wears its pronoun pin (pronouns.h).
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 #include "parts.h"
+#include "pronouns.h"
+
+#ifndef UNIDEX_X4
+#define UNIDEX_X4 0
+#endif
 
 namespace pet {
 
 enum Layer { BODY, EYES_LAYER, MOUTH, HAT, EXTRA, HAIR, OUTFIT, LAYERS };
-static const char *const LAYER_NAMES[LAYERS] = {"Body", "Eyes", "Mouth", "Hat", "Extra", "Hair", "Outfit"};
+static const char *const LAYER_NAMES[LAYERS] = {"Body", "Eyes", "Mouth", "Hat", UNIDEX_X4 ? "Accessory" : "Extra",
+                                                 "Hair", "Outfit"};
+// Bits a layer takes in a saved look, and so the most parts a layer can have.
+static const uint8_t LAYER_BITS[LAYERS] = {UNIDEX_X4 ? 3 : 4, 4, 4, UNIDEX_X4 ? 5 : 4, UNIDEX_X4 ? 5 : 4,
+                                           UNIDEX_X4 ? 5 : 4, UNIDEX_X4 ? 5 : 4};
+// The Waveshare build keeps the parts it shipped with: the RoomiePet ones are added after them.
+static const uint8_t WAVESHARE_PARTS[LAYERS] = {6, 10, 9, 16, 16, 12, 12};
 // The order layers are drawn in: clothes under the face, hair over the eyes (a fringe can cover one), hats over hair.
 static const Layer DRAW_ORDER[LAYERS] = {BODY, OUTFIT, EYES_LAYER, MOUTH, HAIR, HAT, EXTRA};
 static const int SIZE = 32;  // each part is SIZE x SIZE pixels
@@ -24,7 +36,7 @@ struct LayerParts {
   int count;
 };
 
-inline LayerParts partsOf(int layer) {
+inline LayerParts partsOfAll(int layer) {
   switch (layer) {
     case BODY: return {BODIES, countOf(BODIES)};
     case EYES_LAYER: return {EYES, countOf(EYES)};
@@ -36,16 +48,32 @@ inline LayerParts partsOf(int layer) {
   }
 }
 
+inline LayerParts partsOf(int layer) {
+  LayerParts lp = partsOfAll(layer);
+  if (!UNIDEX_X4 && lp.count > WAVESHARE_PARTS[layer]) lp.count = WAVESHARE_PARTS[layer];
+  return lp;
+}
+
+inline int shiftOf(int layer) {
+  int s = 0;
+  for (int i = 0; i < layer; i++) s += LAYER_BITS[i];
+  return s;
+}
+
 struct Look {
   uint8_t part[LAYERS];
+  bool pin;  // wears its pronoun pin (the X4 only: the top bit of a saved look)
 };
 
 // The look a new Pet starts with: the first body, eyes and mouth, no hat, blush, no hair, no outfit.
-static const Look DEFAULT_LOOK = {{0, 0, 0, 0, 1, 0, 0}};
+static const Look DEFAULT_LOOK = {{0, 0, 0, 0, 1, 0, 0}, false};
+
+static const uint32_t PIN_BIT = 1u << 31;
 
 inline uint32_t pack(const Look &l) {
   uint32_t v = 0;
-  for (int i = 0; i < LAYERS; i++) v |= (uint32_t)(l.part[i] & 0x0F) << (4 * i);
+  for (int i = 0; i < LAYERS; i++) v |= (uint32_t)(l.part[i] & ((1u << LAYER_BITS[i]) - 1)) << shiftOf(i);
+  if (UNIDEX_X4 && l.pin) v |= PIN_BIT;
   return v;
 }
 
@@ -54,9 +82,10 @@ inline uint32_t pack(const Look &l) {
 inline Look unpack(uint32_t v) {
   Look l;
   for (int i = 0; i < LAYERS; i++) {
-    const uint8_t p = (v >> (4 * i)) & 0x0F;
+    const uint8_t p = (v >> shiftOf(i)) & ((1u << LAYER_BITS[i]) - 1);
     l.part[i] = p < partsOf(i).count ? p : DEFAULT_LOOK.part[i];
   }
+  l.pin = UNIDEX_X4 && (v & PIN_BIT);
   return l;
 }
 
@@ -82,6 +111,11 @@ static const Drop DROPS[] = {
   {HAT, 11, RARE, "Halo"},                {HAT, 7, RARE, "Wizard hat"},        {EXTRA, 12, RARE, "Bat wings"},
   {OUTFIT, 6, RARE, "Corset"},            {HAT, 12, RARE, "Witch hat"},        {HAT, 8, RARE, "Chef hat"},
   {HAT, 13, LEGENDARY, "Lace veil"},      {EXTRA, 7, LEGENDARY, "Medal"},
+#if UNIDEX_X4  // RoomiePet's parts
+  {EXTRA, 25, UNCOMMON, "Spider"},        {EXTRA, 29, UNCOMMON, "Rose"},       {EXTRA, 27, UNCOMMON, "Shades"},
+  {OUTFIT, 22, UNCOMMON, "Suit"},         {OUTFIT, 13, RARE, "Maid dress"},    {OUTFIT, 21, RARE, "Lace dress"},
+  {HAT, 23, LEGENDARY, "Tiara"},
+#endif
 };
 static const int DROP_COUNT = sizeof DROPS / sizeof DROPS[0];
 
@@ -97,12 +131,12 @@ inline uint8_t rarityOf(int layer, int part) {
 
 // The gifts a Pet has: one bit per part, per layer (saved in NVS as pet_owned).
 struct Owned {
-  uint16_t layer[LAYERS];
+  uint32_t layer[LAYERS];
 };
 inline bool owns(const Owned &o, int layer, int part) {
   return rarityOf(layer, part) == STARTER || (o.layer[layer] >> part & 1);
 }
-inline void give(Owned &o, const Drop &d) { o.layer[d.layer] |= 1 << d.part; }
+inline void give(Owned &o, const Drop &d) { o.layer[d.layer] |= 1u << d.part; }
 inline int giftsOwned(const Owned &o) {
   int n = 0;
   for (const Drop &d : DROPS) n += owns(o, d.layer, d.part);
@@ -170,34 +204,27 @@ inline const Drop *rollDrop(const ChoreLuck &c, const Owned &o, uint32_t r1, uin
 // Level from EXP: 1 at the start, then one every 50.
 inline int levelOf(uint32_t exp) { return 1 + exp / 50; }
 
-// ---- Styles: whole outfits in one go (dress-up's Style row, the web app). One part per layer, -1 = keep what's
-// worn. Gifts this Pet hasn't found yet are left as they are, so a style fills in as they drop.
-struct Style {
-  const char *name;
-  int8_t part[LAYERS];  // BODY, EYES, MOUTH, HAT, EXTRA, HAIR, OUTFIT
-};
-static const Style STYLES[] = {
-  {"Femboy", {-1, 7, 0, 9, 8, 1, 1}},       // lashes, cat ears, bell choker, fluffy bob, pleated skirt
-  {"E-girl", {-1, 6, 5, 0, 13, 8, 5}},      // eyeliner, fangs, cheek hearts, split dye, striped top
-  {"Alternative", {-1, 0, 6, 0, 9, 4, 4}},  // lip ring, studded collar, mohawk, band tee
-  {"Emo", {-1, 9, 4, 0, 11, 6, 2}},         // smudged eyes, chain, emo fringe, hoodie
-  {"Goth", {-1, 6, 7, 13, 14, 2, 6}},       // eyeliner, dark lips, veil, ankh, long hair, corset
-  {"Masc", {-1, 0, 8, 15, 11, 3, 7}},       // smirk, bucket hat, chain, buzz cut, leather jacket
-  {"Femme", {-1, 7, 7, 14, 10, 10, 9}},     // lashes, lipstick, flower crown, pearls, waves, sundress
-  {"Bunny lad", {3, -1, -1, 6, 3, -1, -1}}, // bunny, backwards cap, bow tie
-};
-static const int STYLE_COUNT = sizeof STYLES / sizeof STYLES[0];
-
-inline Look applyStyle(Look l, const Style &s, const Owned &o) {
-  for (int i = 0; i < LAYERS; i++)
-    if (s.part[i] >= 0 && s.part[i] < partsOf(i).count && owns(o, i, s.part[i])) l.part[i] = s.part[i];
+// A random look from any random number source (one call per layer).
+template <typename Rand> Look randomLook(Rand rand) {
+  Look l = DEFAULT_LOOK;
+  for (int i = 0; i < LAYERS; i++) l.part[i] = (uint8_t)(rand() % (uint32_t)partsOf(i).count);
   return l;
 }
 
-// A random look from any random number source (one call per layer).
-template <typename Rand> Look randomLook(Rand rand) {
-  Look l;
-  for (int i = 0; i < LAYERS; i++) l.part[i] = (uint8_t)(rand() % (uint32_t)partsOf(i).count);
+// A random look from what this Pet owns: one call of rand per layer.
+template <typename Rand> Look randomOwned(Rand rand, const Owned &o) {
+  Look l = DEFAULT_LOOK;
+  for (int i = 0; i < LAYERS; i++) {
+    const int n = partsOf(i).count;
+    int choices = 0;
+    for (int p = 0; p < n; p++) choices += owns(o, i, p);
+    int pick = (int)(rand() % (uint32_t)choices);  // never 0 choices: part 0 is always owned
+    for (int p = 0; p < n; p++)
+      if (owns(o, i, p) && pick-- == 0) {
+        l.part[i] = (uint8_t)p;
+        break;
+      }
+  }
   return l;
 }
 

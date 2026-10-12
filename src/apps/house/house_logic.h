@@ -13,13 +13,15 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
+#include "../pet/pronouns.h"
 
 namespace house {
 
 static const size_t MAX_RECORDS = 120, MAX_MEMBERS = 8, TEXT = 24, NAME = 12;
 
 enum Kind : uint8_t {
-  MEMBER = 1,    // a roommate's Pet: text = Pet name, a = Pet look (pet_logic.h's pack)
+  MEMBER = 1,    // a roommate's Pet: text = Pet name, a = Pet look (pet_logic.h's pack), b and c = its owner's
+                 // pronouns (RoomiePet: pronouns.h's pack; 0 = none)
   CHORE = 2,     // text = chore, a = every how many days, b = due day, c = who did it last (0 = no one), d = that day
   ITEM = 3,      // shopping: text = what, a = 1 once bought
   EXPENSE = 4,   // text = what for, a = who paid, b = pence; shared by everyone who had joined by then (born)
@@ -177,6 +179,9 @@ inline const Record *member(const House &h, uint32_t id) {
     if (h.r[i].kind == MEMBER && h.r[i].origin == id) return &h.r[i];
   return nullptr;
 }
+
+// A member's pronouns ("" if none), up to pronouns::MAX characters.
+inline void pronounsOf(const Record &m, char *out) { pronouns::unpack(m.b, m.c, out); }
 
 inline const char *nameOf(const House &h, uint32_t id) {
   const Record *m = member(h, id);

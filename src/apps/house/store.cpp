@@ -79,13 +79,16 @@ void houseUpdateMe() {
   String name = petName();
   if (!name.length()) name = "Pet";
   const uint32_t look = petLookBits();
+  uint32_t pb = 0, pc = 0;  // the pronouns, carried in b and c (pronouns.h)
+  pronouns::pack(petPronouns().c_str(), pb, pc);
   Record *me = myMember();
   if (!me) {
-    add(data, MEMBER, name.c_str(), look);
+    add(data, MEMBER, name.c_str(), look, pb, pc);
     houseSave();
-  } else if (strncmp(me->text, name.c_str(), TEXT) != 0 || me->a != look || (me->flags & DELETED)) {
+  } else if (strncmp(me->text, name.c_str(), TEXT) != 0 || me->a != look || me->b != pb || me->c != pc ||
+             (me->flags & DELETED)) {
     strlcpy(me->text, name.c_str(), sizeof me->text);
-    me->a = look;
+    me->a = look, me->b = pb, me->c = pc;
     me->flags &= ~DELETED;
     touch(data, *me);
     houseSave();

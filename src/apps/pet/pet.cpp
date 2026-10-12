@@ -16,17 +16,23 @@
 
 static const int MAIN_SCALE = 4, EDIT_SCALE = 3;  // 128 px on the main screen, 96 px while editing
 static const int16_t EDIT_AVATAR_Y = CONTENT_TOP + 4, ROW_Y = HINTS_TOP - 14;
-// The editor's rows: one per layer, then Style (whole outfits, pet_logic.h's STYLES), Name, Random and Done.
-static const int STYLE_ROW = pet::LAYERS, NAME_ROW = pet::LAYERS + 1, RANDOM_ROW = pet::LAYERS + 2,
-                 DONE_ROW = pet::LAYERS + 3;
-static const int ROWS = pet::LAYERS + 4;
+// The editor's rows: a layer (0 and up), or one of these. On the X4 (RoomiePet) clothes come first, and there are
+// rows for the Pet's pronouns (pronouns.h's PRESETS) and whether it wears its pronoun pin.
+enum : int8_t { PRONOUNS_ROW = -1, NAME_ROW = -2, RANDOM_ROW = -3, DONE_ROW = -4, PIN_ROW = -5 };
+#if UNIDEX_X4
+static const int8_t ROW_OF[] = {pet::OUTFIT, pet::HAIR,  pet::HAT,    pet::EXTRA, pet::BODY,  pet::EYES_LAYER,
+                                pet::MOUTH,  PRONOUNS_ROW, PIN_ROW, NAME_ROW,   RANDOM_ROW, DONE_ROW};
+#else
+static const int8_t ROW_OF[] = {pet::BODY, pet::EYES_LAYER, pet::MOUTH, pet::HAT,  pet::EXTRA,
+                                pet::HAIR, pet::OUTFIT,     NAME_ROW,   RANDOM_ROW, DONE_ROW};
+#endif
+static const int ROWS = sizeof ROW_OF;
 
 enum Screen : uint8_t { MAIN, EDIT, MEET, NAME };
 RTC_DATA_ATTR static uint8_t screen, row;
 RTC_DATA_ATTR static uint32_t draft;  // the look being edited (kept through sleep)
 RTC_DATA_ATTR static char places[pet::MAX_NAME + 1];  // the name being edited, a letter a place (pet_logic.h)
 RTC_DATA_ATTR static uint8_t place;                    // the place being chosen
-RTC_DATA_ATTR static int8_t styleShown = -1;           // the style last put on in the editor (-1: none yet)
 static bool blinking, happy;
 static uint8_t heart;  // the heart beside it while it's happy: 0 none, else its scale (it pops: 1, then 2)
 static uint32_t nextBlinkAt, openAt, lastPressAt;
@@ -55,7 +61,7 @@ static pet::Owned owned() {
   return o;
 }
 
-void petOwned(uint16_t out[7]) {
+void petOwned(uint32_t out[7]) {
   const pet::Owned o = owned();
   memcpy(out, o.layer, sizeof o.layer);
 }
@@ -94,16 +100,29 @@ const char *petChoreDone(bool onTime, bool helped, bool rescued) {
 
 String petName() { return storageGetString("pet_name"); }
 
+String petPronouns() { return UNIDEX_X4 ? storageGetString("pet_pronouns") : String(); }
+
+// The pronoun pin over a Pet drawn at `scale` with its top left at x0, y0 (pronouns.h draws it at half a Pet pixel,
+// so it needs a scale of 2 or more).
+static void drawPin(const char *pronouns, int scale, int16_t x0, int16_t y0) {
+  if (!pronouns || !*pronouns || scale < 2) return;
+  pronouns::drawPin(pronouns, [&](int x, int y, bool ink) {
+    const int16_t left = x * scale / 2, top = y * scale / 2;
+    display.fillRect(x0 + left, y0 + top, (x + 1) * scale / 2 - left, (y + 1) * scale / 2 - top, ink ? BLACK : WHITE);
+  });
+}
+
 static uint32_t changes;  // counts saves from the website; the screen and the home line each notice a new one
 
 void petChanged() { changes++; }
 
-void petDraw(uint32_t look, int scale, int16_t x0, int16_t y0, PetMood mood) {
+void petDraw(uint32_t look, int scale, int16_t x0, int16_t y0, PetMood mood, const char *pronouns) {
   pet::Look l = pet::unpack(look);
   if (mood == PetMood::Happy) l.part[pet::EYES_LAYER] = pet::HAPPY_EYES;
   pet::drawLook(l, mood == PetMood::Blink, [&](int x, int y, bool ink) {
     display.fillRect(x0 + x * scale, y0 + y * scale, scale, scale, ink ? BLACK : WHITE);
   });
+  if (l.pin) drawPin(pronouns, scale, x0, y0);
 }
 
 void petDrawTag(const char *name, int16_t cx, int16_t bottom) {
@@ -146,6 +165,7 @@ static void drawAvatar(const pet::Look &look, int scale, int16_t y0, bool eyesCl
   pet::drawLook(look, eyesClosed, [&](int x, int y, bool ink) {
     display.fillRect(x0 + x * scale, y0 + y * scale, scale, scale, ink ? BLACK : WHITE);
   });
+  if (look.pin) drawPin(petPronouns().c_str(), scale, x0, y0);
 }
 
 static void save() { storagePutInt("pet_look", pet::pack(pet::unpack(draft))); }  // skips the write if unchanged
@@ -165,10 +185,11 @@ static bool householdSay(char *say, size_t len, HouseFeeling &feeling) {
 }
 
 static void drawMain() {
-  const String name = petName();
-  char right[32];  // its name and level (chores give EXP: petChoreDone)
-  snprintf(right, sizeof right, "%s%sLv %d", name.c_str(), name.length() ? "  " : "", pet::levelOf(petExp()));
-  drawHeader("Pet", right);
+  const String name = petName(), pronouns = petPronouns();
+  char right[48];  // its name, pronouns and level (chores give EXP: petChoreDone)
+  snprintf(right, sizeof right, "%s%s%s%s%sLv %d", name.c_str(), pronouns.length() ? " (" : "", pronouns.c_str(),
+           pronouns.length() ? ")" : "", name.length() || pronouns.length() ? "  " : "", pet::levelOf(petExp()));
+  drawHeader("Pet", fitText(right, display.width() - 40).c_str());
   pet::Look look = pet::unpack(petLookBits());
   char say[64];
   HouseFeeling feeling = HouseFeeling::Normal;
@@ -243,7 +264,8 @@ static Redraw onButton(Event e) {
     return Redraw::Partial;
   }
   pet::Look look = pet::unpack(draft);
-  if (e == Event::BShort && row == NAME_ROW) {
+  const int kind = ROW_OF[row];
+  if (e == Event::BShort && kind == NAME_ROW) {
     pet::placesFromName(petName().c_str(), places);
     place = 0;
     screen = NAME;
@@ -251,19 +273,30 @@ static Redraw onButton(Event e) {
   }
   if (e == Event::AShort) {
     row = (row + 1) % ROWS;
-  } else if (e == Event::BShort && row == DONE_ROW) {
+  } else if (e == Event::BShort && kind == DONE_ROW) {
     save();
     screen = MAIN;
     return Redraw::Full;
-  } else if ((e == Event::BShort || e == Event::BLong) && row == STYLE_ROW) {
-    // The next (or previous) style; gifts not found yet stay as they are.
-    styleShown = ((styleShown + (e == Event::BShort ? 1 : -1)) % pet::STYLE_COUNT + pet::STYLE_COUNT) % pet::STYLE_COUNT;
-    look = pet::applyStyle(look, pet::STYLES[styleShown], owned());
-  } else if (e == Event::BShort && row == RANDOM_ROW) {
+  } else if ((e == Event::BShort || e == Event::BLong) && kind == PRONOUNS_ROW) {
+    // The next (or previous) of the presets; pronouns typed in the web app count as before the first.
+    const String now = petPronouns();
+    int at = -1;
+    for (int i = 0; i < pronouns::PRESET_COUNT; i++)
+      if (now == pronouns::PRESETS[i]) at = i;
+    const int n = pronouns::PRESET_COUNT;
+    at = at < 0 ? (e == Event::BShort ? 0 : n - 1) : ((at + (e == Event::BShort ? 1 : -1)) % n + n) % n;
+    if (*pronouns::PRESETS[at]) storagePutString("pet_pronouns", pronouns::PRESETS[at]);
+    else storageRemoveKey("pet_pronouns");
+    petChanged();
+  } else if (e == Event::BShort && kind == PIN_ROW) {
+    look.pin = !look.pin;
+  } else if (e == Event::BShort && kind == RANDOM_ROW) {
     if (devSeed()) srand(devSeed() + draft);
-    look = pet::onlyOwned(pet::randomLook(randomNumber), owned());
-  } else if ((e == Event::BShort || e == Event::BLong) && row < pet::LAYERS) {
-    pet::stepOwned(look, row, e == Event::BShort ? 1 : -1, owned());  // gifts not found yet are skipped
+    const bool pin = look.pin;
+    look = pet::randomOwned(randomNumber, owned());
+    look.pin = pin;
+  } else if ((e == Event::BShort || e == Event::BLong) && kind >= 0) {
+    pet::stepOwned(look, kind, e == Event::BShort ? 1 : -1, owned());  // gifts not found yet are skipped
   } else {
     return Redraw::None;
   }
@@ -301,31 +334,41 @@ static void drawEdit() {
     else display.drawPixel(x, y, BLACK), display.drawCircle(x, y, 1, BLACK);
   }
   display.setFont(FONT_SMALL);
-  char right[16];
-  if (row < pet::LAYERS) {
-    const pet::LayerParts lp = pet::partsOf(row);
-    display.setCursor(MARGIN, ROW_Y);
-    display.print(pet::LAYER_NAMES[row]);
-    snprintf(right, sizeof right, "%s  %d/%d", lp.parts[look.part[row]].name, look.part[row] + 1, lp.count);
+  const int kind = ROW_OF[row];
+  char right[24];
+  display.setCursor(MARGIN, ROW_Y);
+  if (kind >= 0) {
+    // The part, and where it is among the ones this Pet has.
+    const pet::LayerParts lp = pet::partsOf(kind);
+    const pet::Owned o = owned();
+    int at = 0, of = 0;
+    for (int i = 0; i < lp.count; i++)
+      if (pet::owns(o, kind, i)) {
+        of++;
+        if (i <= look.part[kind]) at = of;
+      }
+    display.print(pet::LAYER_NAMES[kind]);
+    snprintf(right, sizeof right, "%s  %d/%d", lp.parts[look.part[kind]].name, at, of);
     drawRight(right, ROW_Y);
     drawHints("next", "change", "previous");
-  } else if (row == STYLE_ROW) {
-    display.setCursor(MARGIN, ROW_Y);
-    display.print("Style");
-    drawRight(styleShown >= 0 ? pet::STYLES[styleShown].name : "pick one", ROW_Y);
-    drawHints("next", "next style", "previous");
-  } else if (row == NAME_ROW) {
-    display.setCursor(MARGIN, ROW_Y);
+  } else if (kind == PRONOUNS_ROW) {
+    display.print("Pronouns");
+    const String pr = petPronouns();
+    drawRight(pr.length() ? pr.c_str() : "none", ROW_Y);
+    drawHints("next", "change", "previous");
+  } else if (kind == PIN_ROW) {
+    display.print("Pronoun pin");
+    drawRight(!look.pin ? "off" : petPronouns().length() ? "on" : "on (no pronouns)", ROW_Y);
+    drawHints("next", look.pin ? "take off" : "put on", "");
+  } else if (kind == NAME_ROW) {
     display.print("Name");
     const String name = petName();
     drawRight(name.length() ? name.c_str() : "none", ROW_Y);
     drawHints("next", "change", "");
-  } else if (row == RANDOM_ROW) {
-    display.setCursor(MARGIN, ROW_Y);
+  } else if (kind == RANDOM_ROW) {
     display.print("Random look");
     drawHints("next", "shuffle", "");
   } else {
-    display.setCursor(MARGIN, ROW_Y);
     display.print("Done");
     drawHints("next", "save", "");
   }
@@ -387,8 +430,8 @@ static const char *detail() {
     snprintf(buf, sizeof buf, "name:%d:%s", place, name);
     return buf;
   }
-  if (screen == EDIT) snprintf(buf, sizeof buf, "edit:%d:%07lx", row, (unsigned long)pet::pack(pet::unpack(draft)));
-  else snprintf(buf, sizeof buf, "main:%07lx", (unsigned long)pet::pack(pet::unpack(petLookBits())));
+  if (screen == EDIT) snprintf(buf, sizeof buf, UNIDEX_X4 ? "edit:%d:%08lx" : "edit:%d:%07lx", row, (unsigned long)pet::pack(pet::unpack(draft)));
+  else snprintf(buf, sizeof buf, UNIDEX_X4 ? "main:%08lx" : "main:%07lx", (unsigned long)pet::pack(pet::unpack(petLookBits())));
   return buf;
 }
 #endif

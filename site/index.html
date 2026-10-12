@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>RoomiePet: the ChoreGotchi Ecosystem</title>
-<meta name="description" content="RoomiePet: a cooperative household Tamagotchi for roommates on the Xteink X4. Chores, shopping, money and Cash App, and Pets with 90 parts and styles to dress up in: femboy, e-girl, alternative, emo, goth, masc, femme and the bunny lad.">
+<meta name="description" content="RoomiePet: a cooperative household Tamagotchi for roommates on the Xteink X4. Chores, shopping, money and Cash App, and Pets with a wardrobe of over 120 parts, pronoun pins, and a bunny lad.">
 <link rel="canonical" href="https://forrest404.github.io/unidex/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="RoomiePet">
@@ -23,9 +23,9 @@
   .pet small { display: block; color: #5f5f67; font-size: 12px; line-height: 1.35; }
   button.pet { cursor: pointer; width: 100%; font-weight: 400; min-height: 0; transition: border-color .15s, transform .1s; }
   button.pet:hover { border-color: var(--fg); opacity: 1; }
-  .try { display: grid; grid-template-columns: 220px 1fr; gap: 20px; align-items: start; }
+  .try { display: grid; grid-template-columns: 240px 1fr; gap: 20px; align-items: start; }
   @media (max-width: 640px) { .try { grid-template-columns: 1fr; } }
-  .try canvas { width: 220px; height: 220px; image-rendering: pixelated; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
+  .try canvas { width: 240px; height: 240px; image-rendering: pixelated; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
   .pickers { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px 12px; }
   .pickers select { width: 100%; font: inherit; padding: 6px 8px; border: 1px solid var(--field); border-radius: 8px; background: var(--bg); color: var(--fg); }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
@@ -33,6 +33,7 @@
   .wardrobe { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; margin-bottom: 22px; }
   .wardrobe .pet { padding: 6px; }
   .wardrobe .pet b { font-size: 12px; }
+  .check { display: flex; flex-direction: row; gap: 8px; align-items: center; }
   .gift { display: inline-block; margin-top: 2px; padding: 0 6px; border-radius: 999px; font-size: 11px; border: 1px solid #18181b; color: #18181b; }
   .gift.r2 { background: #18181b; color: #fff; }
   .gift.r3 { background: linear-gradient(90deg, #7c3aed, #db2777); border-color: transparent; color: #fff; }
@@ -72,28 +73,43 @@
   </section>
 
   <section>
-    <h2>Styles</h2>
-    <p class="sub">A whole look in one tap, on the X4 (dress-up, the Style row) or in the web app. Tap one to try it on below.</p>
-    <div class="styles" id="styles"></div>
+    <h2>Pets</h2>
+    <p class="sub">A few of the looks a Pet can have, some wearing their owner's pronoun pin. Tap one to try it on below.</p>
+    <div class="styles" id="examples"></div>
   </section>
 
   <section>
-    <h2>Try a look</h2>
-    <p class="sub">Seven layers, drawn exactly as the X4 draws them (clothes under the face, hair under hats).</p>
+    <h2>Dress up</h2>
+    <p class="sub">Seven layers, drawn exactly as the X4 draws them (clothes under the face, hair under hats), plus the
+      pronoun pin.</p>
     <div class="try">
-      <canvas id="tryPet" width="192" height="192"></canvas>
+      <canvas id="tryPet" width="256" height="256"></canvas>
       <div>
-        <div class="chips" id="tryStyles"></div>
         <div class="pickers" id="pickers"></div>
+        <div class="pickers"><label>Pronouns<select id="tryPronouns"></select></label>
+          <label class="check"><input type="checkbox" id="tryPin" checked> Pronoun pin</label></div>
         <div class="chips"><button class="secondary" id="random">Random</button><button class="secondary" id="reset">Start again</button></div>
       </div>
     </div>
   </section>
 
   <section>
+    <h2>Pronouns</h2>
+    <p class="sub">Each roommate can set their pronouns (he/him, she/her, they/them, he/they, she/they, any, it/its,
+      xe/xem, ze/zir, fae/faer and more on the X4, or anything up to 12 characters from the web app). They show:</p>
+    <ul class="sub">
+      <li>beside your Pet's name on its screen, "Pip (she/her)";</li>
+      <li>on its <b>pronoun pin</b>, if it wears one: a badge on its chest, wherever your Pet is drawn big enough to read it;</li>
+      <li>on its name tag when it meets other Pets, and on their friends lists;</li>
+      <li>on your household's Roommates, on every roommate's X4 and in the web app.</li>
+    </ul>
+  </section>
+
+  <section>
     <h2>The wardrobe</h2>
-    <p class="sub">Every part, worn by the plain blob. Each style's everyday pieces are starters every Pet has, so nobody
-      has to earn being themselves. The showy ones are <b>gifts</b>: nothing is bought or spent, they drop after chores.</p>
+    <p class="sub">Every part, worn by the plain blob. Everyday pieces are starters
+      every Pet has, so nobody has to earn being themselves. The showy ones are <b>gifts</b>: nothing is bought or spent,
+      they drop after chores.</p>
     <div id="wardrobe"></div>
     <h3>How gifts drop</h3>
     <p class="sub">Every chore your Pet does has a chance of a gift, then a roll for how rare it is, then a piece it hasn't
