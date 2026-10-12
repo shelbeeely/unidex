@@ -12,7 +12,7 @@ try:
                                       stderr=subprocess.DEVNULL, text=True).strip()
 except Exception:
     version = "dev"
-if env["PIOENV"] == "dev":
+if env["PIOENV"] in ("dev", "x4-dev"):
     version += "-test"
 
 folder = os.path.join(env.subst("$BUILD_DIR"), "generated")

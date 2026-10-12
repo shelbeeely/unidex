@@ -1,10 +1,11 @@
-// Checks site/x4/house.wasm the way the web app uses it (node tools/wasm/house_wasm_test.mjs, from the repo root).
+// Checks house.wasm the way the web app uses it, from the repo root:
+//   node tools/wasm/house_wasm_test.mjs [file]   (default site/x4/house.wasm)
 import { readFileSync } from 'node:fs';
 
 let failures = 0;
 const check = (ok, what) => { console.log(`${ok ? 'ok  ' : 'FAIL'}  ${what}`); failures += !ok; };
 
-const { instance } = await WebAssembly.instantiate(readFileSync('site/x4/house.wasm'));
+const { instance } = await WebAssembly.instantiate(readFileSync(process.argv[2] || 'site/x4/house.wasm'));
 const w = instance.exports;
 const mem = () => new Uint8Array(w.memory.buffer);
 const put = s => { const b = new TextEncoder().encode(s + '\0'); mem().set(b, w.io()); };

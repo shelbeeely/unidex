@@ -52,7 +52,7 @@ static const char *const WEEKDAYS[] = {"Sundays", "Mondays", "Tuesdays", "Wednes
 enum Screen : uint8_t { NO_HOUSE, MENU, CHORES_LIST, SHOPPING, MONEY, REMINDER_LIST, MESSAGE_LIST, ROOMMATES,
                         PICK, AMOUNT, CONFIRM, SYNC, PAY, CASHTAG, PHONE };
 #if UNIDEX_X4
-// The X4 adds "Pay by phone": the household's Cash App links on a phone, over the X4's own hotspot (house/phone.cpp).
+// The X4 adds "Manage on phone": the web app (site/x4) on a phone, over the X4's own hotspot (house/phone.cpp).
 enum MenuRow : uint8_t { M_CHORES, M_SHOPPING, M_MONEY, M_REMINDERS, M_MESSAGES, M_ROOMMATES, M_PHONE, M_SYNC, M_ROWS };
 #else
 enum MenuRow : uint8_t { M_CHORES, M_SHOPPING, M_MONEY, M_REMINDERS, M_MESSAGES, M_ROOMMATES, M_SYNC, M_ROWS };
@@ -232,7 +232,7 @@ static void drawMenu() {
     }
     static const char *const NAMES[] = {"Chores", "Shopping", "Money", "Reminders", "Pet messages", "Roommates",
 #if UNIDEX_X4
-                                        "Pay by phone",
+                                        "Manage on phone",
 #endif
                                         "Sync with roommates"};
     drawRow(i - top, i == cursor, NAMES[i], right);
@@ -676,12 +676,12 @@ static void drawSync() {
 }
 
 #if UNIDEX_X4
-// ---- Pay by phone: the X4's hotspot, joined by scanning its QR code; the page then opens by itself.
+// ---- Manage on phone: the X4's hotspot, joined by scanning its QR code; the web app then opens by itself.
 
 static uint32_t phoneSeen, phoneServedSeen;  // the phone page's changes and pages already on the screen
 
 static void drawPhone() {
-  drawHeader("Pay by phone", housePhoneOn() ? "on" : "");
+  drawHeader("Manage on phone", housePhoneOn() ? "on" : "");
   if (!housePhoneOn()) {
     drawEmpty("Stopped", "It stops after 5 minutes", "unused. B: start again");
     drawHints("", "start", "");
@@ -693,7 +693,7 @@ static void drawPhone() {
   char line[48];
   snprintf(line, sizeof line, "WiFi %s  password %s", hotspotSsid(), hotspotPassword());
   drawCenteredLine(line, CONTENT_TOP + 118);
-  drawCenteredLine("Open, share or paste Cash App links", CONTENT_TOP + 132);
+  drawCenteredLine("Chores, money, Cash App, badges...", CONTENT_TOP + 132);
   drawHints("", "", "");
 }
 

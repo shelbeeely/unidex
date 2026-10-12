@@ -33,8 +33,8 @@ src/
   apps/pet/             pet.cpp (Pet, Dress up, Name), parts.h (the art), meet.cpp (Meet), meet_logic.h,
                         friends_logic.h, send_logic.h (the radio rules, tested on a computer), usb.cpp (P commands)
   apps/badge/           badge.cpp, badge_file.* (BMP checks, shared with the USB upload and Pet)
-  apps/house/           house.cpp (the House's screens and Sync), store.cpp (/house.dat, the Pet's mood), phone.cpp +
-                        phone_page.h (X4: Pay by phone over core/hotspot.*), house_logic.h
+  apps/house/           house.cpp (the House's screens and Sync), store.cpp (/house.dat, the Pet's mood), usb.cpp (H
+                        commands), phone.cpp (X4: the web app over core/hotspot.*), house_logic.h
                         (records, merging, rota, money, radio packets; tools/housetest), see HOUSEHOLD.md
   core/
     launcher.*          splash, home carousel, routes buttons to the open app
@@ -117,7 +117,8 @@ disappears while it sleeps.
   Each test file's first lines give its build command, e.g.
   `c++ -std=c++17 -O2 -I src/apps/pet tools/meettest/meet_test.cpp -o /tmp/meet_test && /tmp/meet_test`.
   `tools/pettest`, `tools/meettest` (Meet, friends, badge sending), `tools/batterytest`, `tools/notetest`,
-  `tools/gametest`, `tools/housetest` (the household). `tools/run_tests.sh` builds and runs them all.
+  `tools/gametest`, `tools/housetest` (the household); `node tools/wasm/house_wasm_test.mjs` checks the X4 web app's
+  WebAssembly (site/x4/house.wasm, built by `tools/wasm/build.sh`). `tools/run_tests.sh` builds and runs them all.
 - **On GitHub:** every push and pull request runs `.github/workflows/ci.yml`: the computer tests and both firmware
   builds. Library and platform versions are pinned in `platformio.ini`, so a build only changes when they're
   changed there.

@@ -45,26 +45,16 @@ A $cashtag is only accepted from its owner's own device, so nobody else's unidex
 roommates' money goes. The amount on the end of the link is the form in common use but isn't documented by Cash
 App: if a phone opens Cash App without the amount, `AMOUNT_IN_LINK` in `src/apps/house/house.cpp` turns it off.
 
-### Pay by phone (X4): open, share, and paste Cash App requests
+### The web app (X4): manage everything from a phone or computer
 
-House, **Pay by phone** starts the X4's own WiFi hotspot and shows its QR code. Scan it with your phone's camera:
-the phone joins and the page opens by itself (if it doesn't, open any website and it redirects). On the page:
-
-- **Each roommate:** what you owe them (or they owe you), their $cashtag, **Open in Cash App** and **Share**.
-- **Share:** phones only open their share sheet from secure (https) pages, and this page comes from the X4 over plain
-  http, so Share uses the share sheet where the phone allows it and otherwise offers **Copy link**, **Text it**
-  (opens Messages with the link) and **Email**. These work the same on iPhone and Android. Pressing and holding a link
-  also brings up the phone's own share option.
-- **Paste a Cash App request:** in Cash App, Request, enter the amount and note, then Share link and Copy. Paste it
-  into the box (the link alone, or everything Cash App shared: the amount is read from "$15" in it), pick who it's
-  for (or Anyone) and save. After the next Sync, your roommates' X4s show that exact request, with your amount and
-  note, as the QR code on Money, in place of your $cashtag link. A request stops showing for someone once they've
-  settled up with you after it was made. Your requests are listed on the page with **Remove**.
-
-Like $cashtags, a request is only accepted from its owner's own device. While the phone is on the X4's hotspot it
-has no internet, so Cash App itself opens once the phone is back on your WiFi or data (it switches back by itself
-when you leave the page). The hotspot has a new password each time and stops after 5 minutes unused, or when you
-leave the screen (hold A).
+The household, Cash App, badges, the timetable and settings can all be managed from a browser
+([WEBAPP.md](WEBAPP.md)): on a phone through the X4's own WiFi (House, **Manage on phone**), or on a computer over
+USB from the website. Its Money page has **Pay in Cash App** and **Share** for each debt, and a box to **paste a
+Cash App request**: in Cash App, Request, the amount and note, Share link, Copy, then paste it (the link alone, or
+everything Cash App shared: the amount is read from "$15" in it) and pick who it's for. After the next Sync,
+roommates' X4s show that exact request as the QR code on Money in place of your $cashtag link, until they settle up
+with you; when they owe you, Share sends it to them. Like $cashtags, a request is only accepted from its owner's own
+device.
 
 ## The Pets
 
