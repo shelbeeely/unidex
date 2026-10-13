@@ -61,6 +61,19 @@ const after = state();
 check(JSON.stringify(after.debts) === JSON.stringify(before.debts) && after.records.length === before.records.length,
   'the records round-trip');
 
+// The virtual household (plan_logic.h, world_logic.h): the template, a room through PLAN SET hex, the scene.
+check(w.plan_template() === 6, 'the template: four shared rooms and a bedroom each');
+const hexLen = w.plan_room_hex(4), roomHex = get(hexLen);
+check(hexLen === 348, 'a room as PLAN SET hex');
+w.plan_clear(); put(roomHex);
+check(w.plan_put() === 1 && w.plan_template() === 6, 'a room loads back');
+put('00'.repeat(174)); check(w.plan_put() === 0, 'not a room: refused');
+w.home_clear(); w.home_add(PIP); w.home_add(BISCUIT);
+const sc = JSON.parse(get(w.scene(20000, 600, PIP, 0)));
+check(sc.rooms.length === 6 && sc.rooms[4].owner === PIP && sc.rooms[4].type === 4 && sc.pets.length === 2 &&
+  sc.health >= 0 && sc.health <= 100, 'the scene: rooms, Pets, health');
+check(JSON.parse(get(w.scene(20000, 600, PIP, 1))).awayRoom === 4, 'away: this Pet\'s bedroom');
+
 // Badges.
 const img = new Uint8Array(w.memory.buffer, w.image(), 200 * 200 * 4);
 for (let i = 0; i < 200 * 200; i++) { const v = (i % 200) * 255 / 199; img.set([v, v, v, 255], i * 4); }

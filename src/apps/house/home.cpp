@@ -35,6 +35,7 @@ static home::AtHome present[8];
 static int presentCount;
 static uint32_t presentAt;  // millis() of the answer `present` came in
 static uint32_t number, numberUpTo;  // the request number, and how far NVS has it reserved
+static uint32_t checkedInAt;         // millis() of the server's last answer
 static uint8_t ticket[home::TICKET];  // the server asked for this X4's release (a relay): where to upload it
 static bool relaying;
 static uint32_t relayAt, relayRetryAt;
@@ -198,7 +199,7 @@ static void checkIn() {
         home::AtHome a = {r.u32(), r.u32(), r.u8()};
         if (a.pet != h.me && a.ago < HOME_FOR_S && presentCount < 8) present[presentCount++] = a;
       }
-      presentAt = millis();
+      presentAt = checkedInAt = millis();
       if (r.u8() == 1)
         if (const uint8_t *t = r.bytes(ota::TRAILER)) otaStreamOffer(t);
       if (r.at < r.n && r.u8() == 1)  // relay: the server wants this X4's release, for the others
@@ -331,6 +332,8 @@ int homeAtHome(home::AtHome *out, int max) {
 
 void homeStatus(char *out, size_t len) { strlcpy(out, status, len); }
 
+bool homeOnHomeNetwork() { return checkedInAt && millis() - checkedInAt < 15 * 60000UL; }
+
 bool homeUsb(const char *line) {
   Print &out = usbOut();
   if (strcmp(line, "HOME GET") == 0) {
@@ -379,6 +382,7 @@ bool homeUsb(const char *line) {
 void homePoll() {}
 int homeAtHome(home::AtHome *, int) { return 0; }
 void homeStatus(char *out, size_t len) { strlcpy(out, "unavailable", len); }
+bool homeOnHomeNetwork() { return false; }
 bool homeUsb(const char *) { return false; }
 
 #endif

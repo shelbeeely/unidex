@@ -86,6 +86,9 @@ inline bool openAnswer(const uint8_t token[secure::KEY], const uint8_t *request,
 //            X4 then uploads it (PUT /v1/upload/<ticket hex>, X-Offset: <bytes so far>; the answer "next <n>" or
 //            "done"), so the server can pass it to roommates' X4s as they check in. The server checks the
 //            signature itself before it offers a relayed release.
+//   Both then end with the home plan: rooms u8 + each (plan_seal.h's ENTRY_LEN bytes, sealed with the plan key
+//   made from this token: the server can open them, for its page). The server keeps the newest of each room (with
+//   the bedroom rule) and answers with the ones the X4 is missing or has older.
 
 struct Writer {
   uint8_t *p;

@@ -35,8 +35,10 @@ enum Kind : uint8_t {
                  // a = pence (0: not said), c = who it's for (0: anyone); owner-only like PAYTAG
   WEAR = 10,     // RoomiePet: the catalog clothes the origin's Pet wears (items_logic.h's ids, 0 = the wardrobe's
                  // part): a = hat, b = accessory, c = hair, d = outfit; owner-only
+  TIDY = 11,     // RoomiePet: a room of the home plan (plan_logic.h) last tidied: a = room id, b = the day (local days
+                 // since 1970); one a room, updated by whoever tidies it (the newest wins)
 };
-static const uint8_t LAST_KIND = WEAR;
+static const uint8_t LAST_KIND = TIDY;
 enum Flags : uint8_t { DELETED = 1 };
 
 struct Record {
@@ -355,6 +357,27 @@ inline bool setWear(House &h, const uint32_t w[4]) {
     return true;
   }
   return !none && add(h, WEAR, "", w[0], w[1], w[2], w[3]) != nullptr;
+}
+
+// The day a room of the home plan was last tidied (TIDY records), 0 if never.
+inline uint32_t tidyDayOf(const House &h, uint32_t room) {
+  uint32_t day = 0;
+  for (int i = 0; i < h.count; i++)
+    if (live(h.r[i], TIDY) && h.r[i].a == room && h.r[i].b > day) day = h.r[i].b;
+  return day;
+}
+
+// This X4's owner tidied a room today: its TIDY record (made if it hasn't one yet). True if the household changed.
+inline bool setTidy(House &h, uint32_t room, uint32_t today) {
+  for (int i = 0; i < h.count; i++) {
+    Record &r = h.r[i];
+    if (!live(r, TIDY) || r.a != room) continue;
+    if (r.b >= today) return false;
+    r.b = today;
+    touch(h, r);
+    return true;
+  }
+  return add(h, TIDY, "", room, today) != nullptr;
 }
 
 // The link a phone opens in Cash App: https://cash.app/$tag, and with an amount https://cash.app/$tag/6.50 (the

@@ -5,9 +5,10 @@
 extern const App timetableApp, badgeApp, dexApp, chooserApp, notesApp, gamesApp, petApp, houseApp, settingsApp;
 
 #if UNIDEX_X4
-// The Xteink X4 has no microphone, so no Notes. It leads with the household: the Pets and the House.
-const App *const APPS[] = {&petApp,   &houseApp,   &timetableApp, &badgeApp,
-                           &dexApp,   &chooserApp, &gamesApp,     &settingsApp};
+// The Xteink X4 has no microphone, so no Notes. It leads with the household: the Pets, the virtual Home, the House.
+extern const App homeApp;
+const App *const APPS[] = {&petApp,   &homeApp,    &houseApp, &timetableApp, &badgeApp,
+                           &dexApp,   &chooserApp, &gamesApp, &settingsApp};
 #else
 const App *const APPS[] = {&timetableApp, &notesApp,   &petApp,   &houseApp, &badgeApp,
                            &dexApp,       &chooserApp, &gamesApp, &settingsApp};

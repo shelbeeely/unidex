@@ -9,6 +9,8 @@
 // Strings go in and out through io(): JS writes text there (NUL-terminated) before a call, and calls that answer
 // write JSON or command lines there and return its length. Records are named by (origin, seq).
 #include "house_logic.h"
+#include "plan_logic.h"
+#include "world_logic.h"
 
 using namespace house;
 
@@ -155,7 +157,7 @@ EXPORT size_t state(uint32_t today, int wday, int mday) {
   j.key("records"), j.ch('[');
   for (int i = 0; i < h.count; i++) {
     const Record &r = h.r[i];
-    if ((r.flags & DELETED) || r.kind == MEMBER || r.kind == PAYTAG || r.kind == WEAR) continue;
+    if ((r.flags & DELETED) || r.kind == MEMBER || r.kind == PAYTAG || r.kind == WEAR || r.kind == TIDY) continue;
     if (r.kind == PAYLINK && r.origin != h.me) continue;  // shown through members' "request"
     j.item(), j.ch('{');
     j.key("kind"), j.num(r.kind);
@@ -262,6 +264,127 @@ EXPORT int changed_count() {
 }
 // After the X4 took them: what it has now is the new starting point.
 EXPORT void sent() { loadedClock = h.clock; }
+
+// ---- The virtual household (RoomiePet): the home plan (plan_logic.h) as the X4 lists it ("PLAN LIST"), who's home,
+// and the scene (world_logic.h) worked out exactly as the X4 works it out.
+
+static plan::Room rooms_[plan::MAX_ROOMS];
+static int roomCount_;
+static uint32_t home_[world::MAX_PETS];
+static int homeCount_;
+static world::Scene scene_;
+
+static void unum(Json &j, uint32_t v) {  // ids are u32: past 2^31 a long would go negative here
+  char b[12];
+  int n = 0;
+  do b[n++] = '0' + v % 10, v /= 10;
+  while (v);
+  while (n) j.ch(b[--n]);
+}
+
+EXPORT void plan_clear() { roomCount_ = 0; }
+// One "PR" line's hex (in io): a room, replacing one with the same id. False if it isn't a proper room or there's
+// no room for it.
+EXPORT int plan_put() {
+  uint8_t b[plan::ROOM_LEN];
+  if (strlen(io_) != 2 * plan::ROOM_LEN) return 0;
+  for (size_t k = 0; k < plan::ROOM_LEN; k++) {
+    const int hi = hexValue(io_[2 * k]), lo = hexValue(io_[2 * k + 1]);
+    if (hi < 0 || lo < 0) return 0;
+    b[k] = hi << 4 | lo;
+  }
+  plan::Room r;
+  if (!plan::decodeRoom(b, r)) return 0;
+  int i = 0;
+  while (i < roomCount_ && rooms_[i].id != r.id) i++;
+  if (i == roomCount_ && roomCount_ == plan::MAX_ROOMS) return 0;
+  rooms_[i] = r;
+  if (i == roomCount_) roomCount_++;
+  return 1;
+}
+// The template for the household loaded (load_begin/load_record), as the X4 makes it: how many rooms.
+EXPORT int plan_template() {
+  const Record *m[MAX_MEMBERS];
+  const int n = members(h, m);
+  uint32_t ids[MAX_MEMBERS];
+  for (int i = 0; i < n; i++) ids[i] = m[i]->origin;
+  roomCount_ = plan::makeTemplate(ids, n, rooms_);
+  return roomCount_;
+}
+// Room i as "PLAN SET" hex (in io): its length.
+EXPORT size_t plan_room_hex(int i) {
+  if (i < 0 || i >= roomCount_) return 0;
+  uint8_t b[plan::ROOM_LEN];
+  plan::encodeRoom(rooms_[i], b);
+  static const char HEX[] = "0123456789abcdef";
+  for (size_t k = 0; k < plan::ROOM_LEN; k++) io_[2 * k] = HEX[b[k] >> 4], io_[2 * k + 1] = HEX[b[k] & 15];
+  io_[2 * plan::ROOM_LEN] = 0;
+  return 2 * plan::ROOM_LEN;
+}
+EXPORT void home_clear() { homeCount_ = 0; }
+EXPORT void home_add(uint32_t pet) {
+  if (homeCount_ < world::MAX_PETS) home_[homeCount_++] = pet;
+}
+
+// The scene as JSON, for today (local days since 1970) at a local minute of the day, as seen by Pet `me` (0: a
+// household display), at home or away: {health, away, awayRoom, rooms: [{id, name, type, floor, x, y, w, h, owner,
+// doors: [[side, at]], pieces: [[id, x, y, rot]], chores: [[origin, seq]], mess, clutter: [[kind, x, y]]}],
+// pets: [{pet, room, x, y, activity, tool}]} (room: an index into rooms).
+EXPORT size_t scene(uint32_t today, int minute, uint32_t me, int away) {
+  const world::Input in = {rooms_, roomCount_, &h, today, minute, home_, homeCount_, me, away != 0};
+  world::build(scene_, in);
+  Json j;
+  j.ch('{');
+  j.key("health"), j.num(scene_.health);
+  j.key("away"), j.raw(scene_.away ? "true" : "false");
+  j.key("awayRoom"), j.num(scene_.awayRoom);
+  j.key("rooms"), j.ch('[');
+  for (int i = 0; i < roomCount_; i++) {
+    const plan::Room &r = rooms_[i];
+    const world::RoomState &st = scene_.state[i];
+    j.item(), j.ch('{');
+    j.key("id"), unum(j, r.id);
+    j.key("name"), j.str(r.name);
+    j.key("type"), j.num(r.type), j.key("floor"), j.num(r.floor);
+    j.key("x"), j.num(r.x), j.key("y"), j.num(r.y), j.key("w"), j.num(r.w), j.key("h"), j.num(r.h);
+    j.key("owner"), unum(j, r.owner);
+    j.key("doors"), j.ch('[');
+    for (const plan::Door &d : r.doors)
+      if (d.side != plan::NO_DOOR) j.item(), j.ch('['), j.num(d.side), j.ch(','), j.num(d.at), j.ch(']');
+    j.ch(']');
+    j.key("pieces"), j.ch('[');
+    for (const plan::Piece &p : r.pieces)
+      if (p.id) {
+        j.item(), j.ch('['), j.num(p.id), j.ch(','), j.num(p.x), j.ch(','), j.num(p.y), j.ch(','), j.num(p.rot);
+        j.ch(']');
+      }
+    j.ch(']');
+    j.key("chores"), j.ch('[');
+    for (const plan::ChoreRef &c : r.chores)
+      if (c.origin) j.item(), j.ch('['), unum(j, c.origin), j.ch(','), j.num(c.seq), j.ch(']');
+    j.ch(']');
+    j.key("mess"), j.num(st.mess);
+    j.key("clutter"), j.ch('[');
+    for (int k = 0; k < st.count; k++) {
+      j.item(), j.ch('['), j.num(st.clutter[k].kind), j.ch(','), j.num(st.clutter[k].x), j.ch(',');
+      j.num(st.clutter[k].y), j.ch(']');
+    }
+    j.ch(']');
+    j.ch('}');
+  }
+  j.ch(']');
+  j.key("pets"), j.ch('[');
+  for (int i = 0; i < scene_.petCount; i++) {
+    const world::PetState &p = scene_.pets[i];
+    j.item(), j.ch('{');
+    j.key("pet"), unum(j, p.pet), j.key("room"), j.num(p.room), j.key("x"), j.num(p.x), j.key("y"), j.num(p.y);
+    j.key("activity"), j.num(p.activity), j.key("tool"), j.num(p.tool);
+    j.ch('}');
+  }
+  j.ch(']');
+  j.ch('}');
+  return j.done();
+}
 
 // ---- Badges: 200x200 RGBA in image() -> a 1-bit BMP in bmp() (its length returned), as the website's badge maker
 // does it (src/apps/badge/badge_file.h): line art keeps its own black and white, photos get a contrast stretch and

@@ -11,6 +11,9 @@ void homePoll();  // every loop (main.cpp)
 // Roommates' Pets that checked in within the last few minutes (not this one): how many, up to max.
 int homeAtHome(home::AtHome *out, int max);
 void homeStatus(char *out, size_t len);  // "3 home", "no server found", "on battery", ...
+// This X4 is on the home network: it checked in with the home server in the last 15 minutes (the virtual Home shows
+// the whole house; away, only this Pet's bedroom).
+bool homeOnHomeNetwork();
 
 // USB and the web app:
 //   HOME GET             -> "HM <pet id> <seconds ago> <flags>" per roommate home, then

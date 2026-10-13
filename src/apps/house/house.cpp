@@ -10,6 +10,7 @@
 #include <qrcode.h>
 #include "house.h"
 #include "secrets.h"
+#include "plan.h"
 #include "../../core/ota.h"
 #include "../../core/app.h"
 #include "../../core/clock.h"
@@ -551,6 +552,7 @@ static void syncStart() {
   syncing = !syncError;
   heardAt = hopAt = millis(), hop = 0;
   secretsSyncStart();
+  planSyncStart();
 }
 
 static void syncStop() {
@@ -597,6 +599,7 @@ static Redraw syncTick() {
   Hello hi;
   otaTick();  // firmware updates between X4s, while the radio is on (core/ota.h)
   secretsTick();  // the household key and the shared WiFi networks (secrets.h)
+  planTick();     // the home plan's rooms (plan.h)
   if (!linkSharesWifi() && now - heardAt > 5000 && (int32_t)(now - hopAt) >= 0) {  // nobody here: another channel
     linkSetChannel(SWEEP[hop++ % sizeof SWEEP]);
     hopAt = now + 1200;
@@ -605,6 +608,10 @@ static Redraw syncTick() {
   const bool asking = secretsAsking();
   while (linkPoll(p)) {
     if (otaHeard(p)) continue;
+    if (planHeard(p)) {
+      news = true;
+      continue;
+    }
     if (secretsHeard(p)) {
       news |= !asking && secretsAsking();  // a question to show
       continue;

@@ -17,6 +17,7 @@
 #include "../apps/house/usb.h"
 #include "../apps/house/secrets.h"
 #include "../apps/house/home.h"
+#include "../apps/house/plan.h"
 #endif
 
 // Protocol (text lines, Mac -> device):
@@ -217,6 +218,8 @@ static void handle(const char *l) {
     clockSet((time_t)strtoll(l + 2, nullptr, 10));
     usbOut().println("OK T");
 #if UNIDEX_X4
+  } else if (planUsb(l)) {
+    // the home plan: "PLAN ...", "TIDY ..." (src/apps/house/plan.h)
   } else if (homeUsb(l)) {
     // the home server: "HOME ..." (src/apps/house/home.h)
   } else if (secretsUsb(l)) {
