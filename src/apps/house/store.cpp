@@ -4,6 +4,7 @@
 #include "../../core/clock.h"
 #include "../../core/storage.h"
 #include "../pet/pet.h"
+#include "secrets.h"
 
 using namespace house;
 
@@ -107,6 +108,8 @@ void houseStart() {
   data.me = petId();
   data.id = esp_random() | 1;
   houseUpdateMe();
+  secretsForget();
+  secretsMakeKey();  // a new household's key (secrets.h): roommates get it from this X4 at Sync
 }
 
 void houseJoin(uint32_t id, uint32_t clock) {
@@ -115,6 +118,7 @@ void houseJoin(uint32_t id, uint32_t clock) {
   data.id = id;
   tick(data, clock);  // joining comes after everything the household has done so far
   houseUpdateMe();
+  secretsForget();  // another household's key: this one's comes from a roommate at Sync
 }
 
 // Only this device forgets it: the others keep this Pet in their rota until they remove it themselves.
@@ -123,6 +127,7 @@ void houseLeave() {
   data.me = petId();
   houseSave();
   houseNewsSeen();
+  secretsForget();
 }
 
 // ---- What this Pet thinks: chores that are this device's turn and late make it sulk; one done today, proud.

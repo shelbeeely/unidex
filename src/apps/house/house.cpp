@@ -9,6 +9,7 @@
 #include <esp_random.h>
 #include <qrcode.h>
 #include "house.h"
+#include "secrets.h"
 #include "../../core/ota.h"
 #include "../../core/app.h"
 #include "../../core/clock.h"
@@ -539,6 +540,7 @@ static void syncStart() {
   lastPressAt = millis();
   syncError = linkStart();
   syncing = !syncError;
+  secretsSyncStart();
 }
 
 static void syncStop() {
@@ -584,8 +586,14 @@ static Redraw syncTick() {
   LinkPacket p;
   Hello hi;
   otaTick();  // firmware updates between X4s, while the radio is on (core/ota.h)
+  secretsTick();  // the household key and the shared WiFi networks (secrets.h)
+  const bool asking = secretsAsking();
   while (linkPoll(p)) {
     if (otaHeard(p)) continue;
+    if (secretsHeard(p)) {
+      news |= !asking && secretsAsking();  // a question to show
+      continue;
+    }
     if (itemsHeard(p.data, p.len)) continue;  // a thing to hold, passed on (held.h)
     if (decodeHello(p.data, p.len, hi)) {
       if (hi.id == h.me) continue;
@@ -656,6 +664,20 @@ static void drawSync() {
   if (!syncing) {
     drawEmpty("Sync stopped", "B: start again");
     drawHints("", "start", "");
+    return;
+  }
+  char title[40], say[40];
+  int code;
+  if (secretsQuestion(title, sizeof title, say, sizeof say, code)) {  // the household key: both owners say yes
+    char digits[8];
+    snprintf(digits, sizeof digits, "%04d", code);
+    drawCenteredLine(title, CONTENT_TOP + 20);
+    drawCenteredLine(say, CONTENT_TOP + 38);
+    display.setFont(FONT_LARGE);
+    drawCenteredLine(digits, CONTENT_TOP + 84);
+    display.setFont(FONT_SMALL);
+    drawCenteredLine("Same code on both X4s?", CONTENT_TOP + 118);
+    drawHints("no", "yes", "");
     return;
   }
   if (joinHouse && !h.id) {
@@ -1073,6 +1095,10 @@ static Redraw onButton(Event e) {
       cursor = top = 0;
       return Redraw::Partial;
     case SYNC:
+      if ((e == Event::AShort || e == Event::BShort) && secretsAsking()) {
+        secretsAnswer(e == Event::BShort);
+        return Redraw::Partial;
+      }
       if (e == Event::BShort && !syncing) {
         syncStart();
         return Redraw::Partial;

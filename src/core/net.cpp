@@ -16,6 +16,9 @@
 #include "power.h"
 #include "battery.h"
 #include "devtools.h"
+#if UNIDEX_X4
+#include "../apps/house/secrets.h"
+#endif
 
 extern const uint8_t caBundle[] asm("_binary_certs_x509_crt_bundle_bin_start");  // see certs/README.md
 extern const uint8_t caBundleEnd[] asm("_binary_certs_x509_crt_bundle_bin_end");
@@ -25,9 +28,39 @@ static const uint32_t WIFI_TIMEOUT_MS = 20000, IO_TIMEOUT_MS = 30000;  // enterp
 static volatile bool begun;   // netBegin() started a connection that netOff() hasn't ended
 static uint32_t beganAt;
 
+// The network to join: the one saved from the website, or (the X4) the strongest of the WiFi networks the
+// household shares (secrets.h) that's in range, the saved one first when both are. pass: "" for the saved one
+// (credGet's), else the shared one's.
+static bool pickNetwork(String &ssid, String &pass) {
+  ssid = credGet("wifi_ssid"), pass = "";
+#if UNIDEX_X4
+  char s[33], p[64];
+  if (!secretsNetwork(0, s, p)) return ssid.length() > 0;
+  WiFi.mode(WIFI_STA);
+  const int found = WiFi.scanNetworks(false, false, false, 120);
+  int best = -1000;
+  String bestSsid, bestPass;
+  for (int i = 0; i < found; i++) {
+    const String seen = WiFi.SSID(i);
+    if (ssid.length() && seen == ssid) {  // the saved one is here: that
+      WiFi.scanDelete();
+      return true;
+    }
+    for (int k = 0; secretsNetwork(k, s, p); k++)
+      if (seen == s && WiFi.RSSI(i) > best) best = WiFi.RSSI(i), bestSsid = s, bestPass = p;
+  }
+  WiFi.scanDelete();
+  if (bestSsid.length()) ssid = bestSsid, pass = bestPass;
+  else if (!ssid.length() && secretsNetwork(0, s, p)) ssid = s, pass = p;  // none seen: try one anyway (hidden)
+#endif
+  return ssid.length() > 0;
+}
+
 const char *netBegin() {
-  const String ssid = credGet("wifi_ssid");
-  if (!ssid.length()) return "WiFi not set up";
+  String ssid, shared;
+  if (!begun && WiFi.status() != WL_CONNECTED) {
+    if (devFakeCloud() ? !(ssid = credGet("wifi_ssid")).length() : !pickNetwork(ssid, shared)) return "WiFi not set up";
+  }
   if (devNetFail()) return "WiFi failed";  // test build switches (X NETFAIL 1, X FAKE 1)
   if (const char *low = batteryTooLow()) return low;
   if (devFakeCloud() || begun || WiFi.status() == WL_CONNECTED) return nullptr;
@@ -35,7 +68,7 @@ const char *netBegin() {
   beganAt = millis();
   setCpuFrequencyMhz(CPU_FAST_MHZ);  // full speed only while the radio is on (as in the Dex scan)
   WiFi.mode(WIFI_STA);
-  const String user = credGet("wifi_user");
+  const String user = shared.length() ? String() : credGet("wifi_user");  // shared networks are home ones
   esp_wifi_sta_wpa2_ent_clear_ca_cert();
   if (user.length()) {  // eduroam and other WPA2-Enterprise networks: PEAP with username + password
     // The stack keeps a pointer to the PEM, so it must outlive the login; the length includes the NUL for mbedTLS.
@@ -50,7 +83,7 @@ const char *netBegin() {
     WiFi.begin(ssid.c_str(), WPA2_AUTH_PEAP, user.c_str(), user.c_str(), credGet("wifi_pass").c_str());
   } else {
     esp_wifi_sta_wpa2_ent_disable();  // begin() never turns enterprise mode off after an eduroam login
-    WiFi.begin(ssid.c_str(), credGet("wifi_pass").c_str());
+    WiFi.begin(ssid.c_str(), shared.length() ? shared.c_str() : credGet("wifi_pass").c_str());
   }
   return nullptr;
 }
