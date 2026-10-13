@@ -35,7 +35,7 @@ static const int ROWS = sizeof ROW_OF;
 enum Screen : uint8_t { MAIN, EDIT, MEET, NAME };
 RTC_DATA_ATTR static uint8_t screen, row;
 RTC_DATA_ATTR static uint32_t draft;      // the look being edited (kept through sleep)
-RTC_DATA_ATTR static uint32_t draftHeld;  // and what it holds (an item id, held.h; not part of the saved look)
+RTC_DATA_ATTR static items::Worn draftWorn;  // and its catalog clothes and what it holds (held.h; not in the look)
 RTC_DATA_ATTR static char places[pet::MAX_NAME + 1];  // the name being edited, a letter a place (pet_logic.h)
 RTC_DATA_ATTR static uint8_t place;                    // the place being chosen
 static bool blinking, happy;
@@ -107,13 +107,20 @@ String petName() { return storageGetString("pet_name"); }
 
 String petPronouns() { return UNIDEX_X4 ? storageGetString("pet_pronouns") : String(); }
 
-uint32_t petHeld() { return UNIDEX_X4 ? (uint32_t)storageGetInt("pet_held", 0) & 0xFFFFFF : 0; }
+// Saved as "pet_worn", the ids one after another; an X4 from before catalog clothes kept what it held in "pet_held".
+items::Worn petWorn() {
+  items::Worn w = {};
+  if (!UNIDEX_X4) return w;
+  if (storageGetBytes("pet_worn", &w, sizeof w) != sizeof w) w = {}, w.id[items::HAND] = storageGetInt("pet_held", 0);
+  for (int k = 0; k < items::KINDS; k++) w.id[k] &= 0xFFFFFF;
+  return w;
+}
 
-// What a Pet drawn at `scale` (top left x0, y0) holds, in its hand: nothing for 0 or an item this X4 doesn't have.
-static void drawHeld(uint32_t held, int scale, int16_t x0, int16_t y0) {
-  const items::Item *it = itemsFind(held);
-  if (!it) return;
-  items::drawHeld(*it, [&](int x, int y, bool ink) {
+// A Pet drawn at `scale` (top left x0, y0), wearing its catalog clothes (the wardrobe's part shows for one this X4
+// doesn't have yet) and holding what it holds.
+static void drawWorn(const pet::Look &look, const items::Worn &worn, bool eyesClosed, int scale, int16_t x0,
+                     int16_t y0) {
+  items::drawPet(look, worn, eyesClosed, itemsFind, [&](int x, int y, bool ink) {
     display.fillRect(x0 + x * scale, y0 + y * scale, scale, scale, ink ? BLACK : WHITE);
   });
 }
@@ -144,13 +151,11 @@ static uint32_t changes;  // counts saves from the website; the screen and the h
 void petChanged() { changes++; }
 
 void petDraw(uint32_t look, int scale, int16_t x0, int16_t y0, PetMood mood, const char *pronouns, uint8_t flag,
-             uint32_t held) {
+             const items::Worn *worn) {
   pet::Look l = pet::unpack(look);
   if (mood == PetMood::Happy) l.part[pet::EYES_LAYER] = pet::HAPPY_EYES;
-  pet::drawLook(l, mood == PetMood::Blink, [&](int x, int y, bool ink) {
-    display.fillRect(x0 + x * scale, y0 + y * scale, scale, scale, ink ? BLACK : WHITE);
-  });
-  drawHeld(held, scale, x0, y0);
+  const items::Worn none = {};
+  drawWorn(l, worn ? *worn : none, mood == PetMood::Blink, scale, x0, y0);
   if (l.pin) drawPin(pronouns, flag, scale, x0, y0);  // over what it holds: the pin's to be read
 }
 
@@ -192,20 +197,61 @@ void petDrawHeart(int16_t cx, int16_t cy, int scale) {
       if (HEART[y][x] == '#') display.fillRect(left + x * scale, top + y * scale, scale, scale, BLACK);
 }
 
-static void drawAvatar(const pet::Look &look, uint32_t held, int scale, int16_t y0, bool eyesClosed = false) {
+static void drawAvatar(const pet::Look &look, const items::Worn &worn, int scale, int16_t y0, bool eyesClosed = false) {
   const int16_t x0 = (display.width() - pet::SIZE * scale) / 2;
-  pet::drawLook(look, eyesClosed, [&](int x, int y, bool ink) {
-    display.fillRect(x0 + x * scale, y0 + y * scale, scale, scale, ink ? BLACK : WHITE);
-  });
-  drawHeld(held, scale, x0, y0);
+  drawWorn(look, worn, eyesClosed, scale, x0, y0);
   if (look.pin) drawPin(petPronouns().c_str(), petFlag(), scale, x0, y0);
 }
 
 static void save() {  // each skips the write if unchanged
   storagePutInt("pet_look", pet::pack(pet::unpack(draft)));
-  if (UNIDEX_X4) storagePutInt("pet_held", draftHeld);
+  if (UNIDEX_X4) {
+    const items::Worn was = petWorn();
+    if (memcmp(&was, &draftWorn, sizeof was) != 0) storagePutBytes("pet_worn", &draftWorn, sizeof draftWorn);
+  }
 }
 
+#if UNIDEX_X4
+// The catalog kind worn in place of a wardrobe layer (-1 for none).
+static int kindOfLayer(int layer) {
+  for (int k = items::HAT; k < items::KINDS; k++)
+    if (items::layerOf(k) == layer) return k;
+  return -1;
+}
+
+// The next (step 1) or previous (-1) catalog item of a kind after catalog index `from` (-1: from the start, or the
+// end going back), or -1 when there's none before the end.
+static int nextOfKind(int kind, int from, int step) {
+  const items::Catalog &c = itemsCatalog();
+  for (int i = from < 0 && step < 0 ? c.count() - 1 : from + step; i >= 0 && i < c.count(); i += step)
+    if (c.at(i).kind == kind) return i;
+  return -1;
+}
+
+// A clothes row: the parts this Pet has for the layer, then the catalog's clothes of that kind, round.
+static void stepClothes(pet::Look &look, int layer, int step, const pet::Owned &o) {
+  const int kind = kindOfLayer(layer);
+  const items::Catalog &c = itemsCatalog();
+  const int at = c.indexOf(draftWorn.id[kind]);
+  if (at >= 0 && c.at(at).kind == kind) {  // on a catalog item: the next one, or back to the parts
+    const int next = nextOfKind(kind, at, step);
+    if (next >= 0) {
+      draftWorn.id[kind] = c.at(next).id;
+      return;
+    }
+    draftWorn.id[kind] = 0;
+    look.part[layer] = step > 0 ? 0 : (uint8_t)(pet::partsOf(layer).count - 1);
+    if (!pet::owns(o, layer, look.part[layer])) pet::stepOwned(look, layer, -1, o);  // the last one it has
+    return;
+  }
+  draftWorn.id[kind] = 0;
+  const uint8_t was = look.part[layer];
+  pet::stepOwned(look, layer, step, o);
+  const bool wrapped = step > 0 ? look.part[layer] <= was : look.part[layer] >= was;
+  const int first = nextOfKind(kind, -1, step);
+  if (wrapped && first >= 0) look.part[layer] = was, draftWorn.id[kind] = c.at(first).id;  // on to the catalog's
+}
+#endif
 
 // What the Pet says about the household, if anything: a roommate's news first (it cheers them on), then its own
 // chores (proud when done today, sulking while one is late).
@@ -239,9 +285,9 @@ static void drawMain() {
   if (talking) {  // a little smaller, with its words over its head
     const int16_t bubbleBottom = CONTENT_TOP + 26;
     petDrawBubble(fitText(say, display.width() - 12).c_str(), display.width() / 2, bubbleBottom);
-    drawAvatar(look, petHeld(), MAIN_SCALE - 1, bubbleBottom + 2, eyesShut);
+    drawAvatar(look, petWorn(), MAIN_SCALE - 1, bubbleBottom + 2, eyesShut);
   } else {
-    drawAvatar(look, petHeld(), MAIN_SCALE, MAIN_Y, eyesShut);
+    drawAvatar(look, petWorn(), MAIN_SCALE, MAIN_Y, eyesShut);
   }
   if (heart) petDrawHeart(175, CONTENT_TOP + 16 + (talking ? 30 : 0), heart);  // beside the head
   drawHints("hi", "dress up", "meet");
@@ -282,7 +328,7 @@ static Redraw onButton(Event e) {
     }
     if (e != Event::BShort) return Redraw::None;
     draft = petLookBits();
-    draftHeld = petHeld();
+    draftWorn = petWorn();
     row = 0;
     screen = EDIT;
     return Redraw::Full;  // the avatar changes size: a full refresh leaves no ghost
@@ -333,9 +379,11 @@ static Redraw onButton(Event e) {
   } else if ((e == Event::BShort || e == Event::BLong) && kind == HELD_ROW) {
     // Nothing, then the catalog in order (held.h), round.
     const items::Catalog &c = itemsCatalog();
-    const int n = c.count() + 1, at = c.indexOf(draftHeld) + 1;  // 0: nothing
-    const int next = ((at + (e == Event::BShort ? 1 : -1)) % n + n) % n;
-    draftHeld = next ? c.at(next - 1).id : 0;
+    const int step = e == Event::BShort ? 1 : -1, at = c.indexOf(draftWorn.id[items::HAND]);
+    const int next = nextOfKind(items::HAND, at, step);  // after the last, nothing
+    draftWorn.id[items::HAND] = next >= 0 ? c.at(next).id : 0;
+  } else if ((e == Event::BShort || e == Event::BLong) && kindOfLayer(kind) >= 0) {
+    stepClothes(look, kind, e == Event::BShort ? 1 : -1, owned());
 #endif
   } else if ((e == Event::BShort || e == Event::BLong) && kind == FLAG_ROW) {
     const uint8_t was = petFlag();
@@ -356,8 +404,16 @@ static Redraw onButton(Event e) {
     look = pet::randomOwned(randomNumber, owned());
     look.pin = pin;
 #if UNIDEX_X4
-    const int n = itemsCatalog().count() + 1, k = (int)(randomNumber() % (uint32_t)n);  // something to hold, or not
-    draftHeld = k ? itemsCatalog().at(k - 1).id : 0;
+    // Something to hold, or not; now and then a catalog piece of clothing in place of a part.
+    const items::Catalog &c = itemsCatalog();
+    for (int k = 0; k < items::KINDS; k++) {
+      int n = 0;
+      for (int i = 0; i < c.count(); i++) n += c.at(i).kind == k;
+      int pick = (int)(randomNumber() % (uint32_t)(k == items::HAND ? n + 1 : 4 * (n + 1)));  // 0..n-1: an item
+      draftWorn.id[k] = 0;
+      for (int i = 0; i < c.count() && pick < n; i++)
+        if (c.at(i).kind == k && pick-- == 0) draftWorn.id[k] = c.at(i).id;
+    }
 #endif
   } else if ((e == Event::BShort || e == Event::BLong) && kind >= 0) {
     pet::stepOwned(look, kind, e == Event::BShort ? 1 : -1, owned());  // gifts not found yet are skipped
@@ -391,7 +447,7 @@ static void drawEdit() {
   char gifts[24];  // gifts found so far (the rest are skipped)
   snprintf(gifts, sizeof gifts, "%d/%d gifts", pet::giftsOwned(owned()), pet::DROP_COUNT);
   drawHeader("Dress up", gifts);
-  drawAvatar(look, draftHeld, EDIT_SCALE, EDIT_AVATAR_Y);
+  drawAvatar(look, draftWorn, EDIT_SCALE, EDIT_AVATAR_Y);
   for (int r = 0; r < ROWS; r++) {  // which row of the editor this is: one dot each
     const int16_t x = display.width() / 2 + (r * 2 - (ROWS - 1)) * 5, y = EDIT_AVATAR_Y + pet::SIZE * EDIT_SCALE + 5;
     if (r == row) display.fillCircle(x, y, 3, BLACK);
@@ -401,6 +457,23 @@ static void drawEdit() {
   const int kind = ROW_OF[row];
   char right[24];
   display.setCursor(MARGIN, ROW_Y);
+#if UNIDEX_X4
+  const items::Item *worn = kind >= 0 && kindOfLayer(kind) >= 0 ? itemsFind(draftWorn.id[kindOfLayer(kind)]) : nullptr;
+  if (worn) {
+    // A catalog piece of clothing, and where it is among the catalog's of its kind.
+    const items::Catalog &c = itemsCatalog();
+    int at = 0, of = 0;
+    for (int i = 0; i < c.count(); i++)
+      if (c.at(i).kind == worn->kind) {
+        of++;
+        if (c.at(i).id == worn->id) at = of;
+      }
+    display.print(pet::LAYER_NAMES[kind]);
+    snprintf(right, sizeof right, "%s  +%d/%d", worn->name, at, of);
+    drawRight(right, ROW_Y);
+    drawHints("next", "change", "previous");
+  } else
+#endif
   if (kind >= 0) {
     // The part, and where it is among the ones this Pet has.
     const pet::LayerParts lp = pet::partsOf(kind);
@@ -419,9 +492,14 @@ static void drawEdit() {
   } else if (kind == HELD_ROW) {
     display.print("Holding");
     const items::Catalog &c = itemsCatalog();
-    const int at = c.indexOf(draftHeld);
-    if (at < 0) strlcpy(right, "nothing", sizeof right);
-    else snprintf(right, sizeof right, "%s  %d/%d", c.at(at).name, at + 1, c.count());
+    int at = 0, of = 0;
+    for (int i = 0; i < c.count(); i++)
+      if (c.at(i).kind == items::HAND) {
+        of++;
+        if (c.at(i).id == draftWorn.id[items::HAND]) at = of;
+      }
+    if (!at) strlcpy(right, "nothing", sizeof right);
+    else snprintf(right, sizeof right, "%s  %d/%d", itemsFind(draftWorn.id[items::HAND])->name, at, of);
     drawRight(right, ROW_Y);
     drawHints("next", "change", "previous");
 #endif
@@ -525,7 +603,7 @@ static Redraw tick() {
   static uint32_t seen;
   if (seen != changes) {  // a new look or name from the website
     seen = changes;
-    if (screen == EDIT) draft = petLookBits(), draftHeld = petHeld();
+    if (screen == EDIT) draft = petLookBits(), draftWorn = petWorn();
     return Redraw::Partial;
   }
   if (screen == MEET) return meetTick();

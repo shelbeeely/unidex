@@ -81,18 +81,25 @@ void houseUpdateMe() {
   const uint32_t look = petLookBits();
   uint32_t pb = 0, pc = 0;  // the pronouns, carried in b and c (pronouns.h)
   pronouns::pack(petPronouns().c_str(), pb, pc);
+  const items::Worn worn = petWorn();
+  const uint32_t d = petFlag() | worn.id[items::HAND] << 8;  // the flag, and what it holds
+  bool changed = false;
   Record *me = myMember();
   if (!me) {
-    add(data, MEMBER, name.c_str(), look, pb, pc, petFlag() | petHeld() << 8);
-    houseSave();
-  } else if (strncmp(me->text, name.c_str(), TEXT) != 0 || me->a != look || me->b != pb || me->c != pc || me->d != (petFlag() | petHeld() << 8) ||
+    add(data, MEMBER, name.c_str(), look, pb, pc, d);
+    changed = true;
+  } else if (strncmp(me->text, name.c_str(), TEXT) != 0 || me->a != look || me->b != pb || me->c != pc || me->d != d ||
              (me->flags & DELETED)) {
     strlcpy(me->text, name.c_str(), sizeof me->text);
-    me->a = look, me->b = pb, me->c = pc, me->d = petFlag() | petHeld() << 8;
+    me->a = look, me->b = pb, me->c = pc, me->d = d;
     me->flags &= ~DELETED;
     touch(data, *me);
-    houseSave();
+    changed = true;
   }
+  const uint32_t clothes[4] = {worn.id[items::HAT], worn.id[items::ACCESSORY], worn.id[items::HAIR],
+                               worn.id[items::OUTFIT]};
+  changed |= setWear(data, clothes);  // what it wears from the catalog: its own record (house_logic.h's WEAR)
+  if (changed) houseSave();
 }
 
 void houseStart() {

@@ -670,8 +670,15 @@ static void drawSync() {
     if (h.id && heard[i].house != h.id) continue;
     const int16_t cx = 25 + shownPets * 50;
     const Record *m = member(h, heard[i].id);
-    petDraw(m ? m->a : petLookBits(), 1, cx - 16, CONTENT_TOP + 48, PetMood::Normal, nullptr, 0,
-            m ? m->d >> 8 : petHeld());
+    items::Worn worn = petWorn();
+    if (m) {  // a member: what they hold (on their card) and wear (their WEAR record)
+      uint32_t clothes[4];
+      wearOf(h, m->origin, clothes);
+      worn.id[items::HAND] = m->d >> 8;
+      worn.id[items::HAT] = clothes[0], worn.id[items::ACCESSORY] = clothes[1];
+      worn.id[items::HAIR] = clothes[2], worn.id[items::OUTFIT] = clothes[3];
+    }
+    petDraw(m ? m->a : petLookBits(), 1, cx - 16, CONTENT_TOP + 48, PetMood::Normal, nullptr, 0, &worn);
     display.setFont(FONT_TINY);
     const String n = fitText(heard[i].name, 48);
     display.setCursor(cx - textWidth(n.c_str()) / 2, CONTENT_TOP + 94);

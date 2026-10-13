@@ -34,6 +34,7 @@ static bool blinking;
 
 // Connected
 static bool connected, amLeft;
+static_assert(meet::WORN == items::KINDS, "Meet's HELLO carries a Worn");
 static meet::Nearby partner;  // the other Pet (copied: kept while it walks away)
 static int16_t pos[2];        // where Pet 0 (left screen's) and Pet 1 stand, in room x
 static uint32_t partedSince, showGap;
@@ -136,7 +137,7 @@ static uint32_t clockNow() { return clockValid() ? (uint32_t)time(nullptr) : 0; 
 
 // A friend met (again): counted, look and name brought up to date, saved.
 static void meetFriend(const meet::Nearby &who) {
-  friendsList().meet(who.id, who.look, who.name, clockNow(), who.pronouns, who.flag, who.held);
+  friendsList().meet(who.id, who.look, who.name, clockNow(), who.pronouns, who.flag, who.worn);
   saveFriends();
 }
 
@@ -191,9 +192,10 @@ static void drawPet(int i, const meet::Actor &a, bool blink) {
   const char *name = me ? myName.c_str() : partner.name;
   const char *pronouns = me ? myPronouns.c_str() : partner.pronouns;
   const uint8_t flag = me ? petFlag() : partner.flag;
-  const uint32_t held = me ? petHeld() : partner.held;
+  items::Worn worn = petWorn();
+  if (!me) memcpy(worn.id, partner.worn, sizeof worn.id);
   const PetMood mood = a.mood == meet::HAPPY ? PetMood::Happy : blink ? PetMood::Blink : PetMood::Normal;
-  petDraw(me ? petLookBits() : partner.look, SCALE, sx, y, mood, pronouns, flag, held);
+  petDraw(me ? petLookBits() : partner.look, SCALE, sx, y, mood, pronouns, flag, &worn);
   if (mid < 0 || mid >= display.width()) return;
   petDrawTag(tagText(name, pronouns).c_str(), mid, y - 3, flag);
   if (a.bang) drawBang(sx + SIZE - 4, y - 24);
@@ -472,7 +474,8 @@ static void sayHello() {
   strlcpy(h.name, petName().c_str(), sizeof h.name);
   strlcpy(h.pronouns, petPronouns().c_str(), sizeof h.pronouns);
   h.flag = petFlag();
-  h.held = petHeld();
+  const items::Worn w = petWorn();
+  memcpy(h.worn, w.id, sizeof h.worn);
   h.items = itemsDigest();
   const int best = nearby.strongest();  // tell it how strongly it's heard here, so both can use both directions
   if (best >= 0) h.heard = meet::packHeard(nearby.at(best).id, nearby.median(best));
@@ -698,11 +701,13 @@ Redraw meetTick() {
     }
     const int i = nearby.find(partner.id);
     if (i >= 0) {
-      const bool look = nearby.at(i).look != partner.look || strcmp(nearby.at(i).name, partner.name);
+      const bool look = nearby.at(i).look != partner.look || strcmp(nearby.at(i).name, partner.name) ||
+                        memcmp(nearby.at(i).worn, partner.worn, sizeof partner.worn);
       if (look) {
         memcpy(partner.name, nearby.at(i).name, sizeof partner.name), partner.look = nearby.at(i).look;
         memcpy(partner.pronouns, nearby.at(i).pronouns, sizeof partner.pronouns);
-        partner.flag = nearby.at(i).flag, partner.held = nearby.at(i).held;
+        partner.flag = nearby.at(i).flag;
+        memcpy(partner.worn, nearby.at(i).worn, sizeof partner.worn);
       }
       changed = look;
     }
@@ -779,7 +784,9 @@ static void drawFriends() {
   drawCentered(when, CONTENT_TOP + 9);
   const int16_t x = (display.width() - SIZE) / 2;
 #if UNIDEX_X4
-  petDraw(f.look, SCALE, x, PY, PetMood::Normal, f.pronouns, f.flag, f.held);
+  items::Worn worn;
+  memcpy(worn.id, f.worn, sizeof worn.id);
+  petDraw(f.look, SCALE, x, PY, PetMood::Normal, f.pronouns, f.flag, &worn);
   petDrawTag(tagText(f.name, f.pronouns).c_str(), x + SIZE / 2, PY - 3, f.flag);
 #else
   petDraw(f.look, SCALE, x, PY);

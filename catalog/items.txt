@@ -1,8 +1,13 @@
-# RoomiePet's things to hold: one line each, "Name, sprite". Names are up to 12 characters; the order is the order
-# they're offered in. A sprite is either
+# RoomiePet's catalog: things to hold and clothes to wear. One line each, "Name, sprite[, kind]". Names are up to 12
+# characters; the order is the order they're offered in. The kind is where it goes: hand (the default: held), hat,
+# accessory (at the neck), hair or outfit; catalog clothes are worn instead of the wardrobe's part for that layer.
+# A sprite is either
 #   kenney:<number>   a tile of Kenney's 1-Bit Pack (kenney-1-bit-pack/sheet.png, CC0: numbered from 0, left to right,
 #                     then row by row, 49 to a row; the web app's Items page shows every one with its number), or
-#   <file>.png        a picture in sprites/: 16 x 16, anything not transparent (or not white) is ink.
+#   <file>.png        a picture in sprites/:
+#                       16 x 16: an icon (anything not transparent or white is ink), held, or worn on the head or neck
+#                       32 x 32: a piece of the Pet's own grid, drawn to fit it (black ink, white paper, transparent
+#                       see-through), for any kind of clothes; rows left empty top and bottom aren't stored
 # After changing this file: python3 tools/items/build.py (it writes src/apps/pet/items.h and site/x4/items.js).
 # An X4 can also take new things to hold from its web app, without new firmware, and passes them on to the X4s it
 # meets (pet_logic.h's items, docs/ITEMS.md).
@@ -40,12 +45,9 @@ Coin, kenney:188
 Coins, kenney:237
 Banknote, kenney:239
 Pouch, kenney:241
-Ring, kenney:337
-Amulet, kenney:386
-Crown, kenney:141
-Big crown, kenney:142
 Trophy, kenney:824
 Key, kenney:571
+Ring, kenney:337
 Heart, kenney:529
 
 # Adventure
@@ -92,10 +94,26 @@ Book, kenney:290
 Disk, kenney:826
 Backpack, kenney:243
 Bell, kenney:145
-Top hat, kenney:143
-Cowboy hat, kenney:144
 Jar, kenney:194
 Pill, kenney:139
 Perfume, kenney:964
 Smiley, kenney:721
 Rocket, kenney:1062
+
+# Hats
+Crown, kenney:141, hat
+Big crown, kenney:142, hat
+Top hat, kenney:143, hat
+Cowboy hat, kenney:144, hat
+Bunny ears, kenney:86, hat
+Long ears, kenney:87, hat
+Beret, beret.png, hat
+
+# Accessories (at the neck)
+Amulet, kenney:386, accessory
+Pendant, kenney:388, accessory
+Necklace, kenney:435, accessory
+Bead chain, kenney:437, accessory
+
+# Outfits
+Heart jumper, heartjumper.png, outfit

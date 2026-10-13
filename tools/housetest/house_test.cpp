@@ -196,6 +196,22 @@ int main() {
   check(setPayTag(*p1, "") && payTagOf(*p1, PIP) == nullptr, "clearing it");
   send(*p1, *p3);
   check(payTagOf(*p3, PIP) == nullptr, "and the clearing spreads");
+  {  // Catalog clothes (RoomiePet): the owner's own WEAR record, spread at Sync, no one else's changes taken
+    uint32_t w[4] = {0, 0, 0, 0}, got[4];
+    check(!setWear(*p1, w), "no clothes, no record");
+    w[0] = 0x123456, w[3] = 0xABCDEF;
+    check(setWear(*p1, w) && !setWear(*p1, w), "wearing a catalog hat and outfit: once");
+    send(*p1, *p2);
+    wearOf(*p2, PIP, got);
+    check(got[0] == 0x123456 && got[1] == 0 && got[3] == 0xABCDEF, "a roommate's device learns them at Sync");
+    for (int i = 0; i < p2->count; i++)
+      if (p2->r[i].kind == WEAR) p2->r[i].a = 0x999999, touch(*p2, p2->r[i]);
+    wearOf(*p2, PIP, got);
+    check(got[0] == 0, "clothes changed by someone else aren't shown");
+    send(*p2, *p1);
+    wearOf(*p1, PIP, got);
+    check(got[0] == 0x123456, "nor taken by their owner's device");
+  }
   char link[64];
   cashAppLink("pip2", 650, true, link, sizeof link);
   check(strcmp(link, "https://cash.app/$pip2/6.50") == 0, "a link with the amount");

@@ -1,5 +1,5 @@
 #pragma once
-// The things a Pet can hold (RoomiePet, the X4): the catalog (items_logic.h) the firmware brings (items.h) plus the
+// The things a Pet can hold and wear (RoomiePet, the X4): the catalog (items_logic.h) the firmware brings (items.h) plus the
 // ones this X4 was given, kept on the card (/pet/items.bin), and passing them on over the radio. On the Waveshare
 // board the catalog is empty and nothing is sent.
 #include "items_logic.h"
@@ -19,8 +19,9 @@ void itemsBeat();
 int itemsReceived();  // items received since start, for the screens ("+2 things to hold")
 
 // USB and the web app (usbsync), lines starting "I ":
-//   I LIST               -> "IT <id, 6 hex> <name hex> <picture, 64 hex> <0 firmware / 1 given>" per item,
+//   I LIST               -> "IT <id, 6 hex> <name hex> <kind> <shape> <top> <rows> <picture hex> <0 firmware / 1 given>"
+//                           per item (items_logic.h: kind, shape, and the picture as Item's data), then
 //                           "OK I LIST <count> <digest, 8 hex>"
-//   I ADD <name hex> <picture hex>  -> "OK I ADD <id>" or "ERR" (known already: "OK I ADD <id>" too)
+//   I ADD <name hex> <kind> <shape> <top> <rows> <picture hex>  -> "OK I ADD <id>" or "ERR" (known already: OK too)
 //   I DEL <id hex>       -> "OK I DEL" or "ERR"
 bool itemsUsb(const char *line);

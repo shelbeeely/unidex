@@ -47,6 +47,11 @@ int main() {
   check(n <= 250 && decodeHello(p, n, backPr) && strcmp(backPr.pronouns, "they/them") == 0 && strcmp(backPr.name, "Pip") == 0 &&
             backPr.flag == 0x83,
         "a HELLO carries the owner's pronouns and pride flag");
+  withPr.worn[0] = 0x0A0B0C, withPr.worn[4] = 0xFFFFFF, withPr.items = 0xDEADBEEF;
+  n = encodeHello(withPr, p);
+  check(decodeHello(p, n, backPr) && backPr.worn[0] == 0x0A0B0C && backPr.worn[1] == 0 && backPr.worn[4] == 0xFFFFFF &&
+            backPr.items == 0xDEADBEEF,
+        "and what the Pet holds and wears from the catalog, and its catalog's digest");
   n = encodeHello(in, p);
   memcpy(bad, p, n);
   memcpy(bad, UNIDEX_MAGIC, 3);

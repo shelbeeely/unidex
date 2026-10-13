@@ -9,7 +9,7 @@
 #include "items.h"
 
 static const char *const FILE_PATH = "/pet/items.bin", *const FILE_TMP = "/pet/items.tmp";
-static const uint8_t FILE_MAGIC[4] = {'R', 'P', 'I', 'T'}, FILE_VERSION = 1;
+static const uint8_t FILE_MAGIC[4] = {'R', 'P', 'I', 'T'}, FILE_VERSION = 2;
 static const uint32_t DIFFER_MS = 5000;  // how long a different digest keeps us sending
 
 static items::Catalog *catalog;
@@ -82,7 +82,7 @@ void itemsBeat() {
   if (!differAt || millis() - differAt > DIFFER_MS) return;
   const int i = items::sendOrder(itemsCatalog(), turn++);
   if (i < 0) return;
-  uint8_t packet[items::PACKET];
+  uint8_t packet[items::PACKET_MAX];
   linkBroadcast(packet, items::encode(itemsCatalog().at(i), packet));
 }
 
@@ -111,21 +111,32 @@ bool itemsUsb(const char *line) {
       const items::Item &it = c.at(i);
       out.printf("IT %06lx ", (unsigned long)it.id);
       for (const char *ch = it.name; *ch; ch++) out.printf("%02x", (uint8_t)*ch);
-      out.print(' ');
-      for (int k = 0; k < items::BYTES; k++) out.printf("%02x", it.bits[k]);
+      out.printf(" %d %d %d %d ", it.kind, it.shape, it.top, it.rows);
+      for (int k = 0; k < items::dataLen(it); k++) out.printf("%02x", it.data[k]);
       out.printf(" %d\n", i >= c.builtinCount);
     }
     out.printf("OK I LIST %d %08lx\n", c.count(), (unsigned long)c.digest());
   } else if (strncmp(cmd, "ADD ", 4) == 0) {
-    const char *name = cmd + 4, *sp = strchr(name, ' ');
-    uint8_t nameBytes[items::NAME + 1] = {}, bits[items::BYTES];
-    const size_t nameLen = sp ? (size_t)(sp - name) : 0;
-    if (!sp || nameLen % 2 || nameLen / 2 > (size_t)items::NAME || !fromHex(name, nameLen, nameBytes, nameLen / 2) ||
-        !fromHex(sp + 1, strlen(sp + 1), bits, items::BYTES) || !items::nameOk((const char *)nameBytes)) {
+    // I ADD <name hex> <kind> <shape> <top> <rows> <picture hex>
+    char nameHex[2 * items::NAME + 2] = {}, dataHex[2 * items::DATA + 2] = {};
+    int kind, shape, top, rows;
+    uint8_t nameBytes[items::NAME + 1] = {};
+    items::Item it = {};
+    const bool parsed = sscanf(cmd + 4, "%25s %d %d %d %d %433s", nameHex, &kind, &shape, &top, &rows, dataHex) == 6;
+    const size_t nameLen = strlen(nameHex);
+    if (parsed && kind >= 0 && kind < items::KINDS && (shape == items::ICON || shape == items::PIECE) && top >= 0 &&
+        top < 32 && rows >= 0 && rows <= items::MAX_ROWS) {
+      it.kind = kind, it.shape = shape, it.top = shape == items::ICON ? 0 : top;
+      it.rows = shape == items::ICON ? items::SIDE : rows;
+    }
+    if (!parsed || !items::shapeOk(it) || nameLen % 2 || nameLen / 2 > (size_t)items::NAME ||
+        !fromHex(nameHex, nameLen, nameBytes, nameLen / 2) || !items::nameOk((const char *)nameBytes) ||
+        !fromHex(dataHex, strlen(dataHex), it.data, items::dataLen(it))) {
       out.println("ERR");
       return true;
     }
-    const items::Item it = items::make((const char *)nameBytes, bits);
+    it = it.shape == items::ICON ? items::makeIcon((const char *)nameBytes, it.kind, it.data)
+                                 : items::makePiece((const char *)nameBytes, it.kind, it.top, it.rows, it.data);
     if (!itemsAdd(it) && !itemsFind(it.id)) {
       out.println("ERR");  // full
       return true;

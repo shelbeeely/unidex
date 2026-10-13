@@ -11,9 +11,9 @@ static const int MAX = 16;
 #ifndef UNIDEX_X4
 #define UNIDEX_X4 0
 #endif
-// Bumped if Friend changes: an older block is then read as no friends. RoomiePet's (4) keeps pronouns, the pride
-// flag and what the Pet holds too.
-static const uint8_t VERSION = UNIDEX_X4 ? 4 : 1;
+// Bumped if Friend changes: an older block is then read as no friends. RoomiePet's (5) keeps pronouns, the pride
+// flag and what the Pet holds and wears from the catalog too.
+static const uint8_t VERSION = UNIDEX_X4 ? 5 : 1;
 
 struct Friend {
   uint32_t id, look;
@@ -21,7 +21,7 @@ struct Friend {
 #if UNIDEX_X4
   char pronouns[13];
   uint8_t flag;
-  uint32_t held;
+  uint32_t worn[5];  // item ids (items_logic.h's Worn)
 #endif
   uint16_t met;      // times met
   uint32_t lastMet;  // unix time, 0 if the clock wasn't set
@@ -40,7 +40,8 @@ struct List {
 
   // A new friend, or a friend met again: its look and name brought up to date, met counted, the time noted.
   // With MAX friends already, the one met longest ago makes room. Returns its place.
-  int meet(uint32_t id, uint32_t look, const char *name, uint32_t now, const char *pronouns = "", uint8_t flag = 0, uint32_t held = 0) {
+  int meet(uint32_t id, uint32_t look, const char *name, uint32_t now, const char *pronouns = "", uint8_t flag = 0,
+           const uint32_t *worn = nullptr) {
     int i = find(id);
     if (i < 0) {
       if (count < MAX) {
@@ -59,9 +60,10 @@ struct List {
 #if UNIDEX_X4
     strncpy(f[i].pronouns, pronouns ? pronouns : "", sizeof f[i].pronouns - 1);
     f[i].pronouns[sizeof f[i].pronouns - 1] = 0;
-    f[i].flag = flag, f[i].held = held;
+    f[i].flag = flag;
+    for (int k = 0; k < 5; k++) f[i].worn[k] = worn ? worn[k] : 0;
 #else
-    (void)pronouns, (void)flag, (void)held;
+    (void)pronouns, (void)flag, (void)worn;
 #endif
     if (f[i].met < 0xFFFF) f[i].met++;
     f[i].lastMet = now;

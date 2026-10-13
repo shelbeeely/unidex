@@ -36,15 +36,19 @@ bool petUsb(const char *line) {
 #if UNIDEX_X4
     usbOut().print(' ');
     for (const char c : petPronouns()) usbOut().printf("%02x", (uint8_t)c);
-    usbOut().printf(" %02x %06lx", petFlag(), (unsigned long)petHeld());
+    usbOut().printf(" %02x", petFlag());
+    const items::Worn w = petWorn();
+    for (int k = 0; k < items::KINDS; k++) usbOut().printf(" %06lx", (unsigned long)w.id[k]);
 #endif
     usbOut().print('\n');
   } else if (strncmp(cmd, "SET ", 4) == 0) {
     // "-" for no name (or no pronouns), so the pronouns after an empty name aren't taken for the name.
-    char lookHex[12] = "", nameHex[2 * MAX_NAME + 2] = "", pronounsHex[2 * pronouns::MAX + 2] = "", flagHex[4] = "", heldHex[8] = "";
+    char lookHex[12] = "", nameHex[2 * MAX_NAME + 2] = "", pronounsHex[2 * pronouns::MAX + 2] = "", flagHex[4] = "";
+    char wornHex[items::KINDS][8] = {};
     String name, said;
     char *end;
-    const int n = sscanf(cmd + 4, "%11s %25s %25s %3s %7s", lookHex, nameHex, pronounsHex, flagHex, heldHex);
+    const int n = sscanf(cmd + 4, "%11s %25s %25s %3s %7s %7s %7s %7s %7s", lookHex, nameHex, pronounsHex, flagHex,
+                         wornHex[0], wornHex[1], wornHex[2], wornHex[3], wornHex[4]);
     const unsigned long look = strtoul(lookHex, &end, 16);
     if (strcmp(nameHex, "-") == 0) nameHex[0] = 0;
     if (strcmp(pronounsHex, "-") == 0) pronounsHex[0] = 0;
@@ -69,9 +73,15 @@ bool petUsb(const char *line) {
       const unsigned long f = strtoul(flagHex, &end, 16);
       storagePutInt("pet_flag", *end || f > 255 || (f & 0x7F) >= (unsigned long)flags::COUNT ? 0 : f);
     }
-    if (n > 4) {  // what it holds: an item id this X4 has (held.h; add it first with I ADD), else nothing
-      const unsigned long h = strtoul(heldHex, &end, 16);
-      storagePutInt("pet_held", !*end && itemsFind(h) ? h : 0);
+    if (n > 4) {  // what it holds and wears: ids of items this X4 has (held.h; add them first with I ADD), of the
+                  // right kind, else nothing (or the wardrobe's part); the clothes stay as they are with only held
+      items::Worn w = petWorn();
+      for (int k = 0; k < items::KINDS && k < n - 4; k++) {
+        const unsigned long id = strtoul(wornHex[k], &end, 16);
+        const items::Item *it = *end ? nullptr : itemsFind(id);
+        w.id[k] = it && it->kind == k ? id : 0;
+      }
+      storagePutBytes("pet_worn", &w, sizeof w);
     }
     houseUpdateMe();  // the household's member card takes the new name, look and pronouns
 #endif

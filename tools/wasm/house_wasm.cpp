@@ -118,6 +118,11 @@ EXPORT size_t state(uint32_t today, int wday, int mday) {
     j.key("pronouns"), j.str(pr);
     j.key("flag"), j.num(m[i]->d & 0xFF);
     j.key("held"), j.num(m[i]->d >> 8);
+    uint32_t clothes[4];  // catalog clothes: hat, accessory, hair, outfit
+    wearOf(h, m[i]->origin, clothes);
+    j.key("wear"), j.ch('[');
+    for (int k = 0; k < 4; k++) j.item(), j.num(clothes[k]);
+    j.ch(']');
     j.key("look"), j.num(m[i]->a);
     j.key("balance"), j.num(bal[i]);
     const char *tag = payTagOf(h, m[i]->origin);
@@ -150,7 +155,7 @@ EXPORT size_t state(uint32_t today, int wday, int mday) {
   j.key("records"), j.ch('[');
   for (int i = 0; i < h.count; i++) {
     const Record &r = h.r[i];
-    if ((r.flags & DELETED) || r.kind == MEMBER || r.kind == PAYTAG) continue;
+    if ((r.flags & DELETED) || r.kind == MEMBER || r.kind == PAYTAG || r.kind == WEAR) continue;
     if (r.kind == PAYLINK && r.origin != h.me) continue;  // shown through members' "request"
     j.item(), j.ch('{');
     j.key("kind"), j.num(r.kind);

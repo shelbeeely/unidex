@@ -33,8 +33,10 @@ enum Kind : uint8_t {
   PAYTAG = 8,    // text = the origin's Cash App $cashtag (without the $); only its owner's changes are accepted
   PAYLINK = 9,   // a Cash App payment request the origin made in Cash App (https://cash.app/pay/link/<text>):
                  // a = pence (0: not said), c = who it's for (0: anyone); owner-only like PAYTAG
+  WEAR = 10,     // RoomiePet: the catalog clothes the origin's Pet wears (items_logic.h's ids, 0 = the wardrobe's
+                 // part): a = hat, b = accessory, c = hair, d = outfit; owner-only
 };
-static const uint8_t LAST_KIND = PAYLINK;
+static const uint8_t LAST_KIND = WEAR;
 enum Flags : uint8_t { DELETED = 1 };
 
 struct Record {
@@ -102,7 +104,7 @@ inline bool makeRoom(House &h) {
 }
 
 // Records only their owner may change: a $cashtag from anyone else's device could send roommates' money elsewhere.
-inline bool ownerOnly(uint8_t kind) { return kind == PAYTAG || kind == PAYLINK; }
+inline bool ownerOnly(uint8_t kind) { return kind == PAYTAG || kind == PAYLINK || kind == WEAR; }
 
 inline Merge merge(House &h, const Record &in) {
   if (ownerOnly(in.kind) && in.editor != in.origin) return OLDER;
@@ -327,6 +329,32 @@ inline bool setPayTag(House &h, const char *tag) {
     return true;
   }
   return clear || add(h, PAYTAG, tag) != nullptr;
+}
+
+// The catalog clothes a member's Pet wears: hat, accessory, hair, outfit (items_logic.h's ids; all 0 if none).
+inline void wearOf(const House &h, uint32_t id, uint32_t out[4]) {
+  const Record *best = nullptr;
+  for (int i = 0; i < h.count; i++) {
+    const Record &r = h.r[i];
+    if (r.kind == WEAR && r.origin == id && r.editor == id && (!best || newer(r, *best))) best = &r;
+  }
+  const bool on = best && !(best->flags & DELETED);
+  out[0] = on ? best->a : 0, out[1] = on ? best->b : 0, out[2] = on ? best->c : 0, out[3] = on ? best->d : 0;
+}
+
+// This device's Pet's catalog clothes (hat, accessory, hair, outfit). True if the household changed.
+inline bool setWear(House &h, const uint32_t w[4]) {
+  const bool none = !w[0] && !w[1] && !w[2] && !w[3];
+  for (int i = 0; i < h.count; i++) {
+    Record &r = h.r[i];
+    if (r.kind != WEAR || r.origin != h.me) continue;
+    if (r.a == w[0] && r.b == w[1] && r.c == w[2] && r.d == w[3] && !(r.flags & DELETED)) return false;
+    r.a = w[0], r.b = w[1], r.c = w[2], r.d = w[3];
+    r.flags &= ~DELETED;
+    touch(h, r);
+    return true;
+  }
+  return !none && add(h, WEAR, "", w[0], w[1], w[2], w[3]) != nullptr;
 }
 
 // The link a phone opens in Cash App: https://cash.app/$tag, and with an amount https://cash.app/$tag/6.50 (the

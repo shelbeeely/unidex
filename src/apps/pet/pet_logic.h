@@ -230,9 +230,11 @@ template <typename Rand> Look randomOwned(Rand rand, const Owned &o) {
 }
 
 // Draws the look, layer by layer: pixel(x, y, ink) for every pixel a layer sets ('#' ink, 'o' paper), with x
-// and y from 0 to SIZE - 1. eyesClosed draws EYES_CLOSED instead of the chosen eyes (a blink).
-template <typename Pixel> void drawLook(const Look &l, bool eyesClosed, Pixel pixel) {
+// and y from 0 to SIZE - 1. eyesClosed draws EYES_CLOSED instead of the chosen eyes (a blink). instead(layer) may
+// draw something else in a layer's place (a catalog piece, items_logic.h) and return true; then the part isn't drawn.
+template <typename Pixel, typename Instead> void drawLook(const Look &l, bool eyesClosed, Pixel pixel, Instead instead) {
   for (const Layer layer : DRAW_ORDER) {
+    if (instead((int)layer)) continue;
     const PetPart &p = layer == EYES_LAYER && eyesClosed ? EYES_CLOSED : partsOf(layer).parts[l.part[layer]];
     for (int y = 0; y < SIZE; y++)
       for (int x = 0; x < SIZE; x++) {
@@ -241,6 +243,9 @@ template <typename Pixel> void drawLook(const Look &l, bool eyesClosed, Pixel pi
         else if (c == 'o') pixel(x, y, false);
       }
   }
+}
+template <typename Pixel> void drawLook(const Look &l, bool eyesClosed, Pixel pixel) {
+  drawLook(l, eyesClosed, pixel, [](int) { return false; });
 }
 
 // Naming on the device, a letter at a time: the name is MAX_NAME places, blank (space) where unused. A cycles the

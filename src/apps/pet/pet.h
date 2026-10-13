@@ -1,11 +1,14 @@
 #pragma once
 #include <Arduino.h>
+#include "items_logic.h"
 
 // Shared by the Pet screen (pet.cpp) and its USB commands (usb.cpp).
 uint32_t petLookBits();  // the saved look, as pet_logic.h packs it
 String petName();        // "" if none is set
 String petPronouns();    // "" if none are set (always on the Waveshare board), e.g. "she/her" (pronouns.h)
-uint32_t petHeld();      // what it holds: an item id (held.h), 0 for nothing (always on the Waveshare board)
+// What it wears from the catalog and holds (held.h): an item id a kind, 0 for the wardrobe's part or nothing in hand
+// (all 0 on the Waveshare board).
+items::Worn petWorn();
 uint8_t petFlag();       // the pride flag byte (flags.h: its index, and ON_PIN when the pin shows it); 0 for none
 // A pride flag w x h at x, y with a white rim (nothing for none).
 void petDrawFlag(uint8_t flag, int16_t x, int16_t y, int16_t w, int16_t h);
@@ -24,7 +27,7 @@ enum class PetMood : uint8_t { Normal, Happy, Blink };
 // the happy or closed eyes.
 // A look that wears its pin shows the pronouns, or the flag when the flag byte says so (at a scale of 2 or more).
 void petDraw(uint32_t look, int scale, int16_t x0, int16_t y0, PetMood mood = PetMood::Normal,
-             const char *pronouns = nullptr, uint8_t flag = 0, uint32_t held = 0);  // held: an item id
+             const char *pronouns = nullptr, uint8_t flag = 0, const items::Worn *worn = nullptr);
 void petDrawHeart(int16_t cx, int16_t cy, int scale);  // a small heart centred at cx, cy (9 x 8 at scale 1)
 // A name tag over a Pet's head, like a game's player name: white text in a black box centred at cx, its bottom
 // edge at `bottom`. Nothing for an empty name.
@@ -36,9 +39,11 @@ void petDrawBubble(const char *text, int16_t cx, int16_t bottom);
 // The website's Tools page (site/pet.js) talks to these over USB. Called from usbsync for every line starting
 // with "P "; returns false if it isn't one of them.
 //   P GET                        -> "OK P <look, 8 hex digits> <name, hex> <pronouns, hex> <flag, 2 hex digits>
-//                                   <held, 6 hex digits>" (the X4; the Waveshare board: 7 digits, nothing after the name)
-//   P SET <look hex> <name hex> [<pronouns hex> [<flag hex> [<held id hex>]]]  -> "OK P SET" or "ERR"  (name: up
-//                                   to 12 printable characters; held: an item this X4 has, 0 for nothing;
+//                                   <held> <hat> <accessory> <hair> <outfit>" (the catalog ids it holds and wears,
+//                                   6 hex digits each; the X4. The Waveshare board: 7 digits, nothing after the name)
+//   P SET <look hex> <name hex> [<pronouns hex> [<flag hex> [<held> [<hat> <accessory> <hair> <outfit>]]]]
+//                                   -> "OK P SET" or "ERR"  (name: up to 12 printable characters; held and the
+//                                   clothes: ids of items this X4 has, of the right kind, 0 for none;
 //                                   "-" or nothing = no name; pronouns (the X4): cleaned by pronouns.h, "-" = none;
 //                                   gifts not found yet are left at the default)
 //   P PARTS                      -> "PP <layer> <index> <rarity> <owned 0/1> <hex name>" per part (rarity 0
