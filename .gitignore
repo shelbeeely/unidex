@@ -6,3 +6,7 @@ shots/
 __pycache__/
 src/idf_component.yml
 src/idf_component.yml.orig
+
+# The home server's data and Python caches
+roomiepet-data/
+__pycache__/

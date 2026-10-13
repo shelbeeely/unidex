@@ -32,8 +32,14 @@ jobs:
 
       - name: Computer tests
         run: |
-          sudo apt-get install -y -qq libmbedtls-dev > /dev/null  # tools/otatest checks signatures with it
+          sudo apt-get install -y -qq libmbedtls-dev > /dev/null  # tools/otatest and securetest use it
           tools/run_tests.sh
+
+      # The home server, talked to as an X4 would (server/test_server.py).
+      - name: Home server
+        run: |
+          pip install -q cryptography
+          python3 -m unittest server/test_server.py
 
       # Files made from others: the Pet's parts for the websites, and the things to hold from catalog/items.txt.
       - name: Generated files are up to date

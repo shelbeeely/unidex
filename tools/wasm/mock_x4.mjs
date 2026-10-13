@@ -11,6 +11,7 @@ const PORT = +(process.argv[2] || 8044), ROOT = 'site/x4';
 const PIP = 100, BISCUIT = 200;
 const house = { id: 77, me: PIP, clock: 2, nextSeq: 1, records: new Map() };
 const settings = { sleep: 10, invert: 0, time: 0, updates: 1 };
+const secrets = { key: '', wifi: [], next: 0x100, url: '' };
 let pet = { look: '00010000', name: 'Pip' }, badges = ['hello.bmp'], timetable = ['Mon,09:00,10:00,Maths,B12'];
 let upload = null, body = null, exp = 0, dry = 0;
 const owned = new Set();  // gifts found, 'layer:part'
@@ -128,6 +129,21 @@ function handle(line, out) {
     addedItems.splice(k, 1);
     return out.push('OK I DEL');
   }
+  // The household key, shared WiFi and the home server (src/apps/house/secrets.h, home.h).
+  if (line === 'KEY GET') return out.push('OK KEY ' + (secrets.key || 'none'));
+  if (line === 'KEY MAKE') { if (secrets.key) return out.push('ERR'); secrets.key = '1a2b3c4d'; return out.push('OK KEY MAKE 1a2b3c4d'); }
+  if (line === 'WIFI LIST') { secrets.wifi.forEach(w => out.push(`WF ${w.id.toString(16).padStart(8, '0')} ${Buffer.from(w.ssid).toString('hex')} ${PIP.toString(16).padStart(8, '0')}`)); return out.push(`OK WIFI LIST ${secrets.wifi.length}`); }
+  if (line.startsWith('WIFI ADD ')) {
+    const [, , ssid] = line.split(' ');
+    if (!secrets.key || !ssid) return out.push('ERR');
+    const name = Buffer.from(ssid, 'hex').toString(), id = secrets.wifi.find(w => w.ssid === name)?.id || ++secrets.next;
+    secrets.wifi = secrets.wifi.filter(w => w.id !== id).concat({ id, ssid: name });
+    return out.push('OK WIFI ADD ' + id.toString(16));
+  }
+  if (line.startsWith('WIFI DEL ')) { const id = parseInt(line.slice(9), 16), n = secrets.wifi.length; secrets.wifi = secrets.wifi.filter(w => w.id !== id); return out.push(n === secrets.wifi.length ? 'ERR' : 'OK WIFI DEL'); }
+  if (line === 'HOME GET') { out.push(`HM ${BISCUIT.toString(16).padStart(8, '0')} 40 1`); return out.push(`OK HOME ${secrets.url ? Buffer.from(secrets.url).toString('hex') : '-'} ${Buffer.from('1 home').toString('hex')}`); }
+  if (line.startsWith('HOME SET ')) { const v = line.slice(9); secrets.url = v === '-' ? '' : Buffer.from(v, 'hex').toString(); return out.push('OK HOME SET'); }
+  if (line === 'HOME TOKEN') return out.push(secrets.key ? `OK HOME TOKEN ${house.id.toString(16).padStart(8, '0')} ${'ab'.repeat(32)}` : 'ERR');
   if (line === 'L') { badges.forEach(b => out.push('F ' + b)); return out.push('OK L'); }
   if (line.startsWith('B ')) { const [, name, bytes] = line.split(' '); upload = { name, left: +bytes }; return out.push('OK B'); }
   if (line.startsWith('D ') && upload) {

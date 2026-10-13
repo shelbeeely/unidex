@@ -33,7 +33,8 @@ void secretsEncodeNetwork(int i, uint8_t *out);
 //   KEY GET              -> "OK KEY <fingerprint, 8 hex digits, or none>"
 //   KEY MAKE             -> "OK KEY MAKE <fingerprint>" or "ERR" (it has one, or isn't in a household)
 //   WIFI LIST            -> "WF <id> <ssid hex> <added by: Pet id>" per network, "OK WIFI LIST <count>"
-//   WIFI ADD <ssid hex> <password hex>  -> "OK WIFI ADD <id>" or "ERR" (no key, too long, full); the same SSID
+//   WIFI ADD <ssid hex> <password hex, or - for an open one>  -> "OK WIFI ADD <id>" or "ERR" (no key, too long,
+//                                          full); the same SSID
 //                                          again changes its password
 //   WIFI DEL <id>        -> "OK WIFI DEL" or "ERR"
 bool secretsUsb(const char *line);

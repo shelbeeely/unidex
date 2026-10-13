@@ -270,7 +270,7 @@ bool secretsUsb(const char *line) {
     char ssidHex[2 * SSID + 2] = "", passHex[2 * PASS + 2] = "", ssid[SSID + 1], pass[PASS + 1], s[SSID + 1], p[PASS + 1];
     NetList &l = list();
     if (!secretsHaveKey() || sscanf(line + 9, "%65s %127s", ssidHex, passHex) != 2 || !textFromHex(ssidHex, ssid, SSID) ||
-        !textFromHex(passHex, pass, PASS) || !*ssid)
+        !(strcmp(passHex, "-") ? textFromHex(passHex, pass, PASS) : (*pass = 0, true)) || !*ssid)
       return out.println("ERR"), true;
     Network n = {};
     for (int i = 0; i < l.count; i++)  // the same network again: its new password

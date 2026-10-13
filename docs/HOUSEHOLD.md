@@ -157,6 +157,11 @@ household; roommates do see each other's looks, outfits and all, at Sync and whe
 The website's Tools page designer still shows the first five layers only: saving a look from it takes off the hair
 and outfit (put them back on the X4 or in its web app).
 
+## Home WiFi and the home server
+
+The household key, the WiFi networks roommates share, and the home server that keeps X4s in step while they're
+charging at home: [HOMESERVER.md](HOMESERVER.md).
+
 ## The time
 
 Chores need the date. A device whose clock isn't set takes the time from a roommate's at Sync. The X4 has no clock

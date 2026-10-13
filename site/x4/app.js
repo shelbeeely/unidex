@@ -305,7 +305,7 @@ const VIEWS = {
       ${S.members.map(m => {
         const link = m.id !== S.me && payLink(m, 0, S.me);
         return `<div class="card"><div class="row"><canvas class="mini" data-look="${m.look}" data-pronouns="${esc(m.pronouns || '')}" data-flag-byte="${m.flag || 0}" data-worn="${[m.held || 0, ...(m.wear || [])].join(',')}" width="96" height="96"></canvas>
-          <div class="grow"><div class="title">${withPronouns(m.name, m.pronouns, m.flag)}${m.id === S.me ? ' · you' : ''}</div>
+          <div class="grow"><div class="title">${withPronouns(m.name, m.pronouns, m.flag)}${m.id === S.me ? ' · you' : ''}${(info.home?.pets || []).includes(m.id) ? ' <i class="rar">home</i>' : ''}</div>
           <div class="sub">${m.tag ? '$' + esc(m.tag) : 'No $cashtag'} · ${m.balance > 0 ? 'owed ' + money(m.balance) : m.balance < 0 ? 'owes ' + money(-m.balance) : 'even'}</div></div>
           ${link ? `<a class="b cash" href="${esc(link.url)}">Cash App</a><button class="b" data-act="shareMember" data-id="${m.id}">Share</button>` : ''}</div></div>`;
       }).join('')}
@@ -349,6 +349,7 @@ const VIEWS = {
         <p class="sub">Clock: ${+s.time ? new Date(s.time * 1000).toLocaleString() : 'not set'}
           <button class="b" data-act="setTime">Set it from this ${onHotspot ? 'phone' : 'computer'}</button></p>
         <p class="sub">Firmware ${esc(s.version || '?')} · connected over ${device.name}</p></div>
+      ${S && S.id ? homeCards() : ''}
       ${S && S.id ? `<div class="card"><div class="title">Household</div><p class="note">Leaving forgets the household on this X4 only; the others keep it.</p>
         <button class="b" data-act="leave">Leave the household</button></div>` : ''}`;
   },
@@ -790,6 +791,21 @@ const ACTIONS = {
     ok(await run('W ' + lines.length + ' ' + c, ...lines), 'OK W');
     toast('Timetable saved');
   },
+  keyMake: async () => {
+    if (!confirm('Make a new household key? Only if no roommate\'s X4 has one yet: theirs would then be different.')) return;
+    ok(await run('KEY MAKE'), 'OK KEY MAKE');
+    await readExtras(); render(); toast('Made. Roommates get it from this X4 at Sync.');
+  },
+  wifiDel: async d => {
+    if (!confirm('Stop sharing this network? Roommates\' X4s forget it at their next Sync.')) return;
+    ok(await run('WIFI DEL ' + (+d.id).toString(16)), 'OK WIFI DEL');
+    await readExtras(); render();
+  },
+  homeToken: async () => {
+    const t = reply(ok(await run('HOME TOKEN'), 'OK HOME TOKEN'), 'OK HOME TOKEN ').split(' ');
+    info.homeSetup = t[3] + ' ' + t[4];
+    render();
+  },
   setTime: async () => { ok(await run('T ' + Math.floor(Date.now() / 1000)), 'OK T'); await readExtras(); render(); toast('Clock set'); },
 };
 
@@ -801,6 +817,18 @@ function saveTimetableEdits() {
 }
 
 const FORMS = {
+  wifiAdd: async f => {
+    const ssid = f.ssid.value.trim(), pass = f.pass.value;
+    if (!ssid) return toast('Which network?');
+    ok(await run(`WIFI ADD ${toHex(enc.encode(ssid))} ${pass ? toHex(enc.encode(pass)) : '-'}`), 'OK WIFI ADD');
+    await readExtras(); render(); toast(`${ssid} shared: roommates' X4s get it at their next Sync`);
+  },
+  homeUrl: async f => {
+    const url = f.url.value.trim();
+    if (url && !/^https?:\/\/[^\s/]+(:\d+)?\/?$/.test(url)) return toast('Like http://192.168.1.20:8044');
+    ok(await run('HOME SET ' + (url ? toHex(enc.encode(url.replace(/\/$/, ''))) : '-')), 'OK HOME SET');
+    await readExtras(); render(); toast('Saved');
+  },
   addKenney: f => addItem(f.name.value, +f.kind.value, ICON, 0, 16, adding.kenney),
   addOwn: f => addItem(f.name.value, +f.kind.value, ICON, 0, 16, adding.own),
   addPiece: f => addPiece(f.name.value),
@@ -869,7 +897,16 @@ async function badgeFrom(file, style, light) {
 }
 
 async function readExtras() {
-  const r = await run('G', 'P GET', 'P PARTS', 'I LIST', 'L', 'W GET');
+  const r = await run('G', 'P GET', 'P PARTS', 'I LIST', 'L', 'W GET', 'KEY GET', 'WIFI LIST', 'HOME GET');
+  const k = reply(r, 'OK KEY ');
+  info.key = k ? k.split(' ')[2] : null;  // null: firmware from before the household key
+  info.wifi = r.filter(l => l.startsWith('WF ')).map(l => {
+    const [, id, ssid, editor] = l.split(' ');
+    return { id: parseInt(id, 16), ssid: fromHex(ssid), editor: parseInt(editor, 16) };
+  });
+  const hm = (reply(r, 'OK HOME ') || '').split(' ');
+  info.home = { url: hm[2] && hm[2] !== '-' ? fromHex(hm[2]) : '', status: hm[3] ? fromHex(hm[3]) : '',
+    pets: r.filter(l => l.startsWith('HM ')).map(l => parseInt(l.split(' ')[1], 16)) };
   info.items = r.filter(l => l.startsWith('IT ')).map(l => {
     const [, id, name, kind, shape, top, rows, data, added] = l.split(' ');
     return fromList({ id: parseInt(id, 16), name: fromHex(name), kind: +kind, shape: +shape, top: +top, rows: +rows, data,
@@ -888,6 +925,33 @@ async function readExtras() {
     worn: [6, 7, 8, 9, 10].map(i => parseInt(p[i] || '0', 16) || 0) };
   info.badges = r.filter(l => l.startsWith('F ')).map(l => l.slice(2));
   info.timetable = r.filter(l => l.startsWith('WL ')).map(l => l.slice(3).split(',').slice(0, 5));
+}
+
+// ---- Home WiFi (the household's shared networks, sealed with its key) and the home server.
+function homeCards() {
+  const key = info.key, wifi = info.wifi || [], home = info.home || {};
+  const nameOf = id => (S.members.find(m => m.id === id) || {}).name || 'a roommate';
+  const keyCard = !key ? '' : key === 'none'
+    ? `<p class="note">This X4 doesn't have the household key yet. If a roommate's X4 has it, open House > Sync on both:
+        each shows a 4-digit code, and when they match, say yes on both. If nobody has one yet, make it here (only once
+        per household).</p><button class="b" data-act="keyMake">Make the household key</button>`
+    : `<p class="note">Shared with roommates' X4s at Sync and through the home server, sealed with the household key
+        (${esc(key)}): nobody else can read the passwords, not even the server. An X4 joins the strongest one in range.</p>
+      ${wifi.map(w => `<div class="row"><span class="grow">${esc(w.ssid)} <span class="sub">added by ${esc(nameOf(w.editor))}</span></span>
+        <button class="b" data-act="wifiDel" data-id="${w.id}">Remove</button></div>`).join('') || '<p class="sub">None yet.</p>'}
+      <form class="add" data-form="wifiAdd"><label>Network<input name="ssid" maxlength="32" required autocomplete="off"></label>
+        <label>Password<input name="pass" type="password" maxlength="63" autocomplete="new-password"></label>
+        <button class="b p">Share it</button></form>`;
+  return `<div class="card"><div class="title">Home WiFi</div>${keyCard}</div>
+    <div class="card"><div class="title">Home server</div>
+      <p class="note">While it's charging on a home WiFi, the X4 checks in with your RoomiePet home server
+        (server/roomiepet_server.py) every minute: the household stays in step with roommates' X4s, Pets see who's home,
+        and new signed releases come down. Status: <b>${esc(home.status || 'unknown')}</b>.</p>
+      <form class="add" data-form="homeUrl"><label class="grow">Address<input name="url" placeholder="Found on the WiFi by itself"
+        value="${esc(home.url || '')}" autocomplete="off"></label><button class="b p">Save</button></form>
+      ${key && key !== 'none' ? `<p><button class="b" data-act="homeToken">Set up the server</button></p>
+        ${info.homeSetup ? `<p class="note">On the server, once (keep it to yourself: it lets the server hold the household):</p>
+        <pre class="code">python3 server/roomiepet_server.py --add-household ${esc(info.homeSetup)}</pre>` : ''}` : ''}</div>`;
 }
 
 // ---- Wiring
