@@ -1,4 +1,5 @@
 #include "usbsync.h"
+#include "ota.h"
 #include <Arduino.h>
 #include <esp_rom_crc.h>
 #include "clock.h"
@@ -34,8 +35,9 @@
 //   D <hex>                -> "K" per line (max 64 bytes; the ack is the flow control), and after the
 //                          last byte "OK F <name>" or "ERR". Written to a temp file, then renamed.
 // Xteink X4 only (the web app, site/x4, over USB or the X4's hotspot):
-//   G                      -> "OK G sleep=<s> invert=<0|1> time=<unix, 0 if unset> version=<v>"
-//   G SET sleep <10|20|30|60> / G SET invert <0|1> -> "OK G SET" or "ERR"
+//   G                      -> "OK G sleep=<s> invert=<0|1> time=<unix, 0 if unset> version=<v>" (the X4 adds
+//                             "updates=<0|1>": take firmware updates from other X4s, ota.h)
+//   G SET sleep <10|20|30|60> / G SET invert <0|1> / G SET updates <0|1> -> "OK G SET" or "ERR"
 //   W GET                  -> "WL <line>" per line of /timetable.csv, then "OK W GET"
 //   W <count> <crc32>      then <count> lines (as E): replaces /timetable.csv -> "OK W <crc>" or "ERR"
 //   BX <name>              -> deletes a badge: "OK BX" or "ERR"
@@ -216,8 +218,8 @@ static void handle(const char *l) {
   } else if (houseUsb(l)) {
     // the household: "H ..." (src/apps/house/usb.h)
   } else if (strcmp(l, "G") == 0) {
-    usbOut().printf("OK G sleep=%d invert=%d time=%ld version=%s\n", powerSleepSeconds(), display.inverted ? 1 : 0,
-                    clockValid() ? (long)time(nullptr) : 0L, UNIDEX_VERSION);
+    usbOut().printf("OK G sleep=%d invert=%d time=%ld version=%s updates=%d\n", powerSleepSeconds(),
+                    display.inverted ? 1 : 0, clockValid() ? (long)time(nullptr) : 0L, UNIDEX_VERSION, otaEnabled());
   } else if (strncmp(l, "G SET ", 6) == 0) {
     char key[12] = "";
     int value = -1;
@@ -227,6 +229,9 @@ static void handle(const char *l) {
       usbOut().println("OK G SET");
     } else if (strcmp(key, "invert") == 0 && (value == 0 || value == 1)) {
       displaySetInverted(value);
+      usbOut().println("OK G SET");
+    } else if (strcmp(key, "updates") == 0 && (value == 0 || value == 1)) {
+      otaSetEnabled(value);
       usbOut().println("OK G SET");
     } else {
       usbOut().println("ERR");

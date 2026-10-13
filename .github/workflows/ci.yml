@@ -31,7 +31,9 @@ jobs:
         run: pip install platformio
 
       - name: Computer tests
-        run: tools/run_tests.sh
+        run: |
+          sudo apt-get install -y -qq libmbedtls-dev > /dev/null  # tools/otatest checks signatures with it
+          tools/run_tests.sh
 
       # Files made from others: the Pet's parts for the websites, and the things to hold from catalog/items.txt.
       - name: Generated files are up to date
@@ -58,6 +60,16 @@ jobs:
 
       - name: Build the Xteink X4 firmware
         run: pio run -e x4
+
+      # Radio updates are off until the release key exists (src/core/ota_key.h): build them on with a throwaway key,
+      # so that code is checked too, and sign the result to check the signing tool on a real image.
+      - name: Build the X4 firmware with radio updates on (a throwaway key)
+        run: |
+          pip install -q cryptography
+          python3 tools/ota/keygen.py --out /tmp/ota-test-key.pem
+          pio run -e x4
+          strings .pio/build/x4/firmware.bin | grep -q "RPOTA:" || (echo "no RPOTA marker in the image"; exit 1)
+          git checkout src/core/ota_key.h
 
       - name: Build the Xteink X4 test firmware
         run: pio run -e x4-dev

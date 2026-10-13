@@ -10,7 +10,7 @@ import { extname, join } from 'node:path';
 const PORT = +(process.argv[2] || 8044), ROOT = 'site/x4';
 const PIP = 100, BISCUIT = 200;
 const house = { id: 77, me: PIP, clock: 2, nextSeq: 1, records: new Map() };
-const settings = { sleep: 10, invert: 0, time: 0 };
+const settings = { sleep: 10, invert: 0, time: 0, updates: 1 };
 let pet = { look: '00010000', name: 'Pip' }, badges = ['hello.bmp'], timetable = ['Mon,09:00,10:00,Maths,B12'];
 let upload = null, body = null, exp = 0, dry = 0;
 const owned = new Set();  // gifts found, 'layer:part'
@@ -85,7 +85,7 @@ function handle(line, out) {
   if (line === 'H SAVE') return out.push('OK H SAVE');
   if (line === 'H START') { house.id = 78; return out.push('OK H START'); }
   if (line === 'H LEAVE') { house.id = 0; house.records.clear(); return out.push('OK H LEAVE'); }
-  if (line === 'G') return out.push(`OK G sleep=${settings.sleep} invert=${settings.invert} time=${settings.time} version=mock`);
+  if (line === 'G') return out.push(`OK G sleep=${settings.sleep} invert=${settings.invert} time=${settings.time} version=mock updates=${settings.updates}`);
   if (line.startsWith('G SET ')) { const [, , k, v] = line.split(' '); settings[k] = +v; return out.push('OK G SET'); }
   if (line === 'P GET') return out.push(`OK P ${pet.look} ${Buffer.from(pet.name).toString('hex')} ${Buffer.from(pet.pronouns || '').toString('hex')} ${(pet.flag || 0).toString(16).padStart(2, '0')} ${(pet.worn || [0, 0, 0, 0, 0]).map(id => id.toString(16).padStart(6, '0')).join(' ')}`);
   if (line === 'P PARTS') {

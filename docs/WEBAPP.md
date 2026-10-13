@@ -45,6 +45,7 @@ when you leave the X4's hotspot.
 | `H DUMP`, `H PUT <hex>`, `H SAVE`, `H START`, `H LEAVE` | The household (`src/apps/house/usb.h`) |
 | `G`, `G SET sleep <s>`, `G SET invert <0/1>` | Settings |
 | `I LIST`, `I ADD <name hex> <kind> <shape> <top> <rows> <picture hex>`, `I DEL <id>` | Things to hold and wear: the X4's catalog, adding one, removing one it was given ([ITEMS.md](ITEMS.md)) |
+| `G SET updates <0\|1>` | Take firmware updates from other X4s ([OTA.md](OTA.md)); `G` says it as `updates=` |
 | `P GET`, `P SET <look> <name hex> <pronouns hex> <flag> <held> <hat> <accessory> <hair> <outfit>`, `P PARTS` | The Pet's look (8 hex digits: 3 bits for the body, 4 for eyes and mouth, 5 for each of the rest, and the top bit for the pin), name and pronouns (`-` for none), and pride flag (2 hex digits: its number in `flags.h`, plus 80 when the pin shows it), and what it holds and wears from the catalog (item ids, 6 hex digits each, 0 for nothing or the wardrobe's part); every part with its rarity and whether this Pet has found it, then the Pet's EXP and how many gifts it has found |
 | `T <unix>` | Set the clock from the phone or computer |
 | `L`, `B ...` + `D ...`, `BX <name>` | List, upload and delete badges |

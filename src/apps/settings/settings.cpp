@@ -15,13 +15,18 @@
 #include "../../core/usbsync.h"
 #include <unidex_version.h>
 #include "../../core/board.h"
+#include "../../core/ota.h"
 
 static const char *VERSION = UNIDEX_VERSION;  // from git, tools/version.py
 static const int SLEEP_CHOICES[] = {10, 20, 30, 60};
-static const int ROW_H = 26;
+static const int ROW_H = UNIDEX_X4 ? 22 : 26;  // the X4 has a row more (Updates)
 
 enum Screen : uint8_t { LIST, DATETIME, INFO, RESET, CONFIRM, CONFIRM_AGAIN };
+#if UNIDEX_X4
+enum Row : uint8_t { DATE, SLEEP, INVERT, UPDATES, INFO_ROW, RESET_ROW, ROWS };  // Updates: from other X4s (ota.h)
+#else
 enum Row : uint8_t { DATE, SLEEP, INVERT, INFO_ROW, RESET_ROW, ROWS };
+#endif
 enum Reset : uint8_t { TALLY, DEX, CALENDAR, PET_FRIENDS, EVERYTHING, FACTORY, RESETS };
 static const char *RESET_NAMES[] = {"Chooser tally", "Dex", "Calendar", "Pet friends", "Everything", "Factory reset"};
 static const int RESET_ROW_H = 22;  // six rows fit above the hints
@@ -59,9 +64,18 @@ static void drawList() {
   drawRow(DATE, cursor == DATE, "Date & time", time);
   drawRow(SLEEP, cursor == SLEEP, "Sleep after", sleep);
   drawRow(INVERT, cursor == INVERT, "Invert", display.inverted ? "on" : "off");
+#if UNIDEX_X4
+  char updates[32];
+  otaStatus(updates, sizeof updates);
+  drawRow(UPDATES, cursor == UPDATES, "Updates", updates);
+#endif
   drawRow(INFO_ROW, cursor == INFO_ROW, "Battery & info", ">");
   drawRow(RESET_ROW, cursor == RESET_ROW, "Reset data", ">");
+#if UNIDEX_X4
+  drawHints("next", cursor == SLEEP || cursor == INVERT || cursor == UPDATES ? "change" : "open", "");
+#else
   drawHints("next", cursor == SLEEP || cursor == INVERT ? "change" : "open", "");
+#endif
 }
 
 // Text pieces in a line, centred; the piece at `active` is inverted in a box `boxH` tall.
@@ -293,6 +307,10 @@ static Redraw onButton(Event e) {
         } else if (cursor == INVERT) {
           displaySetInverted(!display.inverted);
           return Redraw::Full;  // every pixel changes
+#if UNIDEX_X4
+        } else if (cursor == UPDATES) {  // take updates from other X4s, or not
+          otaSetEnabled(!otaEnabled());
+#endif
         } else {
           screen = cursor == INFO_ROW ? INFO : RESET;
           resetCursor = 0;

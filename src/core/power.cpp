@@ -1,4 +1,5 @@
 #include "power.h"
+#include "ota.h"
 #include "input.h"
 #include "storage.h"
 #include "battery.h"
@@ -116,6 +117,7 @@ void powerSleepIfIdle() {
 // Keep the panel powered in its own deep sleep (RAM retained), so the first refresh after waking can be
 // partial. RST/CS stay HIGH so it isn't woken or selected. A button wakes it (and, if timerUs, the timer).
 static void deepSleep(uint64_t timerUs) {
+  otaInstallIfReady();  // an update from another X4, downloaded and checked: restarts into it instead (ota.h)
   displayDeepSleep();  // before the holds below freeze the panel's CS
   gpio_hold_en(PIN_LATCH);
 #if !UNIDEX_X4

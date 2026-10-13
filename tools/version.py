@@ -18,7 +18,21 @@ if env["PIOENV"] in ("dev", "x4-dev"):
 folder = os.path.join(env.subst("$BUILD_DIR"), "generated")
 os.makedirs(folder, exist_ok=True)
 header = os.path.join(folder, "unidex_version.h")
-text = '#pragma once\n#define UNIDEX_VERSION "%s"\n' % version
+# The release number radio updates compare (src/core/ota_logic.h's seqOf): from the last tag, "v1.5" -> 1005000, so
+# a build between releases never looks newer than its release. 0 without a release tag (and for the test build).
+try:
+    tag = subprocess.check_output(["git", "describe", "--tags", "--abbrev=0"], cwd=env.subst("$PROJECT_DIR"),
+                                  stderr=subprocess.DEVNULL, text=True).strip()
+except Exception:
+    tag = ""
+parts = tag[1:].split(".") if tag.startswith("v") else []
+seq = 0
+if 2 <= len(parts) <= 3 and all(p.isdigit() and int(p) <= 999 for p in parts):
+    parts = [int(p) for p in parts] + [0] * (3 - len(parts))
+    seq = parts[0] * 1000000 + parts[1] * 1000 + parts[2]
+if env["PIOENV"] in ("dev", "x4-dev"):
+    seq = 0
+text = '#pragma once\n#define UNIDEX_VERSION "%s"\n#define UNIDEX_OTA_SEQ %d\n' % (version, seq)
 if not os.path.exists(header) or open(header).read() != text:
     with open(header, "w") as f:
         f.write(text)

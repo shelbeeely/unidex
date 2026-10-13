@@ -9,6 +9,7 @@
 #include <esp_random.h>
 #include <qrcode.h>
 #include "house.h"
+#include "../../core/ota.h"
 #include "../../core/app.h"
 #include "../../core/clock.h"
 #include "../../core/display.h"
@@ -582,7 +583,9 @@ static Redraw syncTick() {
   bool news = false;
   LinkPacket p;
   Hello hi;
+  otaTick();  // firmware updates between X4s, while the radio is on (core/ota.h)
   while (linkPoll(p)) {
+    if (otaHeard(p)) continue;
     if (itemsHeard(p.data, p.len)) continue;  // a thing to hold, passed on (held.h)
     if (decodeHello(p.data, p.len, hi)) {
       if (hi.id == h.me) continue;

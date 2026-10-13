@@ -342,7 +342,10 @@ const VIEWS = {
         <form class="add" data-form="settings"><label>Sleep after<select name="sleep">${[10, 20, 30, 60].map(v =>
           `<option value="${v}"${+s.sleep === v ? ' selected' : ''}>${v} s</option>`).join('')}</select></label>
           <label>Screen<select name="invert"><option value="0">Black on white</option><option value="1"${s.invert === '1' ? ' selected' : ''}>White on black</option></select></label>
+          <label>Updates<select name="updates"><option value="1">From other X4s</option><option value="0"${s.updates === '0' ? ' selected' : ''}>Only over USB</option></select></label>
           <button class="b p">Save</button></form>
+        <p class="note">An X4 takes a newer release from another X4 it syncs with or meets, only if it's signed with
+          the RoomiePet release key, checks every byte, and installs it when it next sleeps.</p>
         <p class="sub">Clock: ${+s.time ? new Date(s.time * 1000).toLocaleString() : 'not set'}
           <button class="b" data-act="setTime">Set it from this ${onHotspot ? 'phone' : 'computer'}</button></p>
         <p class="sub">Firmware ${esc(s.version || '?')} · connected over ${device.name}</p></div>
@@ -822,7 +825,7 @@ const FORMS = {
     return change(() => (putText(tag), wasm.set_paytag()), tag ? 'Saved' : 'Removed');
   },
   settings: async f => {
-    ok(await run('G SET sleep ' + f.sleep.value, 'G SET invert ' + f.invert.value));
+    ok(await run('G SET sleep ' + f.sleep.value, 'G SET invert ' + f.invert.value, 'G SET updates ' + f.updates.value));
     await readExtras(); render(); toast('Saved');
   },
   badge: async f => {

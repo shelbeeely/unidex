@@ -4,6 +4,7 @@
 #include "core/display.h"
 #include "core/input.h"
 #include "core/launcher.h"
+#include "core/ota.h"
 #include "core/power.h"
 #include "core/storage.h"
 #include "core/usbsync.h"
@@ -26,6 +27,7 @@ void setup() {
   launcherBegin(woke);
   powerOffIfFlat();
   powerWatchdogBegin();
+  otaBoot();  // a new release that got this far is kept (core/ota.h)
 }
 
 void loop() {

@@ -66,6 +66,26 @@ jobs:
           PY
           ls -la "$out"
 
+      # The Xteink X4 (RoomiePet) firmware, signed for radio updates (tools/ota/sign.py, through the build's
+      # tools/ota/sign_build.py) when the release key is set as the secret OTA_SIGNING_KEY: X4s on an older release
+      # then take it from each other. Flashed over USB like any other (the signature rides after the image).
+      - name: Build the X4 firmware from the latest release, signed
+        env:
+          OTA_SIGNING_KEY: ${{ secrets.OTA_SIGNING_KEY }}
+        run: |
+          set -e
+          pip install -q cryptography
+          cd ../release
+          git submodule update --init
+          pio run -e x4
+          mkdir -p "$GITHUB_WORKSPACE/x4"
+          cp .pio/build/x4/firmware.bin "$GITHUB_WORKSPACE/x4/roomiepet-x4-$RELEASE_TAG-firmware.bin"
+          if [ -n "$OTA_SIGNING_KEY" ]; then
+            python3 tools/ota/sign.py "$GITHUB_WORKSPACE/x4/roomiepet-x4-$RELEASE_TAG-firmware.bin" --verify
+          else
+            echo "::warning::OTA_SIGNING_KEY isn't set: the X4 firmware is unsigned, so X4s won't pass it on by radio"
+          fi
+
       - name: Attach the firmware files to the release
         if: github.event_name == 'release'
         env:
@@ -76,7 +96,8 @@ jobs:
           for f in bootloader.bin partitions.bin boot_app0.bin firmware.bin; do
             cp "site/firmware/$f" "$d/unidex-$RELEASE_TAG-$f"
           done
-          (cd "$d" && sha256sum unidex-* > "unidex-$RELEASE_TAG-SHA256SUMS.txt")
+          cp x4/*.bin "$d/"
+          (cd "$d" && sha256sum unidex-* roomiepet-* > "unidex-$RELEASE_TAG-SHA256SUMS.txt")
           gh release upload "$RELEASE_TAG" "$d"/* --clobber
 
       - uses: actions/upload-pages-artifact@v3

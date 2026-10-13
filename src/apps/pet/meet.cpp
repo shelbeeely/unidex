@@ -6,6 +6,7 @@
 #include "../badge/badge_file.h"
 #include "pet.h"
 #include "held.h"
+#include "../../core/ota.h"
 #include "../../core/clock.h"
 #include "../../core/devtools.h"
 #include "../../core/display.h"
@@ -643,7 +644,9 @@ Redraw meetTick() {
   bool gotAct = false, gotAsk = false;
   meet::Message act = {}, ask = {};
   uint32_t actAt = 0, connectFrom = 0;
+  otaTick();  // firmware updates between X4s, while the radio is on (core/ota.h)
   while (linkPoll(p)) {
+    if (otaHeard(p)) continue;
     if (itemsHeard(p.data, p.len)) {  // a thing to hold, passed on (held.h)
       changed = true;
     } else if (meet::decodeHello(p.data, p.len, h)) {
