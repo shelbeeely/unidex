@@ -1,6 +1,7 @@
 #pragma once
 #include <Arduino.h>
 #include "house_logic.h"
+#include "../pet/items_logic.h"
 
 // The household shared by roommates' Pets (house_logic.h), kept on the SD card (/house.dat). Shared by the House
 // app (house.cpp) and the Pet, whose mood follows the chores.
@@ -14,6 +15,8 @@ void houseStart();    // a new household with this device's Pet in it
 void houseJoin(uint32_t id, uint32_t clock);  // join someone's household (heard over the radio), after their clock
 void houseLeave();    // forget the household on this device
 void houseUpdateMe(); // this Pet's name and look onto its member record, if they changed
+// What a roommate's Pet holds (on their member card) and wears from the catalog (their WEAR record).
+items::Worn houseWornOf(const house::Record &member);
 const char *houseCurrency();  // "$"
 void houseFormatMoney(int32_t pence, char *out, size_t len);  // "$6.50"
 
@@ -35,5 +38,7 @@ HouseMood houseMood();
 
 // News the Pet passes on once: a roommate did a chore (it cheers) or their Pet sent a message.
 void houseAddNews(const char *text);
+// A record from a roommate that changed something (Sync, the home server): news if it's theirs to cheer for.
+void houseHeardChange(const house::Record &r, const house::Record *old);
 bool houseNews(char *out, size_t len);
 void houseNewsSeen();

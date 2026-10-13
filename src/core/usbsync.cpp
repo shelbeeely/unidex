@@ -16,6 +16,7 @@
 #if UNIDEX_X4
 #include "../apps/house/usb.h"
 #include "../apps/house/secrets.h"
+#include "../apps/house/home.h"
 #endif
 
 // Protocol (text lines, Mac -> device):
@@ -216,6 +217,8 @@ static void handle(const char *l) {
     clockSet((time_t)strtoll(l + 2, nullptr, 10));
     usbOut().println("OK T");
 #if UNIDEX_X4
+  } else if (homeUsb(l)) {
+    // the home server: "HOME ..." (src/apps/house/home.h)
   } else if (secretsUsb(l)) {
     // the household key and shared WiFi: "KEY ...", "WIFI ..." (src/apps/house/secrets.h)
   } else if (houseUsb(l)) {

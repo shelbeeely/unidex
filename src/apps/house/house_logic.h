@@ -544,6 +544,25 @@ inline bool decodeRecord(const uint8_t *o, Record &r) {
   return r.origin != 0 && r.seq != 0;
 }
 
+// One encoded record (RECORD_LEN bytes: a Sync packet's, or the home server's), merged; the callback hears about it
+// if it changed something, with the record as it was (nullptr if new). 1 if it changed something.
+template <typename F>
+inline int mergeEncoded(House &h, const uint8_t *o, F changed) {
+  Record r;
+  if (!decodeRecord(o, r)) return 0;
+  Record before;
+  const Record *old = nullptr;
+  for (int k = 0; k < h.count; k++)
+    if (sameKey(h.r[k], r)) {
+      before = h.r[k];
+      old = &before;
+    }
+  const Merge m = merge(h, r);
+  if (m != ADDED && m != UPDATED) return 0;
+  changed(r, old);
+  return 1;
+}
+
 // Up to PER_PACKET records from `from` on; returns the packet length (the next start is from + count).
 inline size_t encodeRecords(const House &h, int from, uint8_t *out, int &count) {
   header(out, RECORDS, h.id);
@@ -564,22 +583,7 @@ inline int mergePacket(House &h, const uint8_t *p, size_t len, F changed) {
   const int n = p[HEADER];
   if (n > (int)PER_PACKET || len != HEADER + 1 + n * RECORD_LEN) return 0;
   int changes = 0;
-  for (int i = 0; i < n; i++) {
-    Record r;
-    if (!decodeRecord(p + HEADER + 1 + i * RECORD_LEN, r)) continue;
-    Record before;
-    const Record *old = nullptr;
-    for (int k = 0; k < h.count; k++)
-      if (sameKey(h.r[k], r)) {
-        before = h.r[k];
-        old = &before;
-      }
-    const Merge m = merge(h, r);
-    if (m == ADDED || m == UPDATED) {
-      changes++;
-      changed(r, old);
-    }
-  }
+  for (int i = 0; i < n; i++) changes += mergeEncoded(h, p + HEADER + 1 + i * RECORD_LEN, changed);
   return changes;
 }
 

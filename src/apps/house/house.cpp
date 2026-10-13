@@ -622,16 +622,7 @@ static Redraw syncTick() {
         strlcpy(joinName, hi.name, sizeof joinName);
       }
     } else {
-      const int got = mergePacket(h, p.data, p.len, [&](const Record &r, const Record *old) {
-        char text[64];
-        if (r.kind == CHORE && old && r.d != old->d && r.c && r.c != h.me && !(r.flags & DELETED)) {
-          snprintf(text, sizeof text, "%s did %s! Yay!", nameOf(h, r.c), r.text);
-          houseAddNews(text);
-        } else if (r.kind == MESSAGE && !old && r.origin != h.me) {
-          snprintf(text, sizeof text, "%s says: %s", nameOf(h, r.origin), r.text);
-          houseAddNews(text);
-        }
-      });
+      const int got = mergePacket(h, p.data, p.len, houseHeardChange);
       if (got) {
         changes += got;
         dirty = news = true;
@@ -695,14 +686,7 @@ static void drawSync() {
     if (h.id && heard[i].house != h.id) continue;
     const int16_t cx = 25 + shownPets * 50;
     const Record *m = member(h, heard[i].id);
-    items::Worn worn = petWorn();
-    if (m) {  // a member: what they hold (on their card) and wear (their WEAR record)
-      uint32_t clothes[4];
-      wearOf(h, m->origin, clothes);
-      worn.id[items::HAND] = m->d >> 8;
-      worn.id[items::HAT] = clothes[0], worn.id[items::ACCESSORY] = clothes[1];
-      worn.id[items::HAIR] = clothes[2], worn.id[items::OUTFIT] = clothes[3];
-    }
+    const items::Worn worn = m ? houseWornOf(*m) : petWorn();
     petDraw(m ? m->a : petLookBits(), 1, cx - 16, CONTENT_TOP + 48, PetMood::Normal, nullptr, 0, &worn);
     display.setFont(FONT_TINY);
     const String n = fitText(heard[i].name, 48);

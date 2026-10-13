@@ -5,6 +5,7 @@
 #include "core/input.h"
 #include "core/launcher.h"
 #include "core/ota.h"
+#include "apps/house/home.h"
 #include "core/power.h"
 #include "core/storage.h"
 #include "core/usbsync.h"
@@ -41,6 +42,7 @@ void loop() {
   devTick();
 #endif
   launcherPoll();
+  homePoll();  // the home server, while charging on a known WiFi (apps/house/home.h)
   powerOffIfFlat();
   powerSleepIfIdle();
   powerNap();

@@ -43,6 +43,7 @@ struct Progress {
 static bool mineChecked, shareable;  // this X4's own release: signed, whole, and so offered
 static ota::Manifest mine;
 static ota::Download *dl;            // a download under way, or nullptr
+static bool streaming;               // dl is coming from the home server (home.cpp), not the radio
 static const esp_partition_t *target;
 static uint8_t source[6], banned[6];
 static uint32_t heardSourceAt, wantAt, offerAt, verifiedAt, bannedUntil, savedDone;
@@ -80,6 +81,7 @@ static void checkMine() {
 static void clearDownload(bool forget) {
   delete dl;
   dl = nullptr;
+  streaming = false;
   if (forget) storageRemoveKey("ota_prog");
 }
 
@@ -91,6 +93,8 @@ static void saveProgress() {
   storagePutBytes("ota_prog", &p, sizeof p);
   savedDone = dl->done;
 }
+
+static int8_t readyCache = -1;  // otaReady's answer, -1 until read
 
 static bool readyManifest(ota::Manifest &m) {
   uint8_t t[ota::TRAILER];
@@ -108,6 +112,7 @@ static void finish() {
     uint8_t t[ota::TRAILER];
     ota::packTrailer(dl->m, t);
     storagePutBytes("ota_ready", t, sizeof t);
+    readyCache = 1;
   } else {  // a source sending the wrong bytes: start again, from someone else for a while
     memcpy(banned, source, 6);
     bannedUntil = millis() + 600000;
@@ -115,41 +120,52 @@ static void finish() {
   clearDownload(true);
 }
 
-static void heardOffer(const LinkPacket &p) {
-  ota::Manifest m;
-  if (!ota::decodeOffer(p.data, p.len, m) || m.seq <= MY_SEQ || !otaEnabled()) return;
-  if ((uint32_t)storageGetInt("ota_bad", 0) == m.seq) return;  // it didn't start here before
+// An offered release (over the radio, or from the home server): true if this X4 is now getting it (dl).
+static bool acceptOffer(const ota::Manifest &m) {
+  if (m.seq <= MY_SEQ || !otaEnabled()) return false;
+  if ((uint32_t)storageGetInt("ota_bad", 0) == m.seq) return false;  // it didn't start here before
   ota::Manifest ready;
-  if (readyManifest(ready) && ready.seq >= m.seq) return;
+  if (readyManifest(ready) && ready.seq >= m.seq) return false;
   const uint32_t now = millis();
-  if (dl && memcmp(dl->m.sha, m.sha, 32) == 0 && dl->m.seq == m.seq) {  // the one we're getting: keep a source
-    if (!memcmp(source, p.mac, 6) || now - heardSourceAt > SOURCE_GONE_MS / 2) memcpy(source, p.mac, 6), heardSourceAt = now;
-    return;
-  }
-  if (dl && dl->m.seq >= m.seq) return;
-  if ((int32_t)(now - bannedUntil) < 0 && !memcmp(banned, p.mac, 6)) return;
-  if (batteryTooLow()) return;
+  if (dl && memcmp(dl->m.sha, m.sha, 32) == 0 && dl->m.seq == m.seq) return true;  // already getting it
+  if (dl && dl->m.seq >= m.seq) return false;
+  if (batteryTooLow()) return false;
   target = esp_ota_get_next_update_partition(nullptr);
-  if (!target || target == esp_ota_get_running_partition() || m.size + ota::TRAILER > target->size) return;
+  if (!target || target == esp_ota_get_running_partition() || m.size + ota::TRAILER > target->size) return false;
   // The signature, at most once every few seconds (anyone can send offers; checking one takes a moment).
   uint8_t t[ota::TRAILER];
   ota::packTrailer(m, t);
   if (memcmp(t, verified, sizeof t) != 0) {
-    if (now - verifiedAt < VERIFY_GAP_MS) return;
+    if (now - verifiedAt < VERIFY_GAP_MS) return false;
     verifiedAt = now;
-    if (!ota::verify(m, OTA_PUBLIC_KEY)) return;
+    if (!ota::verify(m, OTA_PUBLIC_KEY)) return false;
     memcpy(verified, t, sizeof t);
   }
   clearDownload(false);
   storageRemoveKey("ota_ready");  // the partition is about to be written: an older update waiting there is gone
+  readyCache = 0;
   dl = new ota::Download();
   Progress saved;
   const bool resume = storageGetBytes("ota_prog", &saved, sizeof saved) == sizeof saved &&
                       memcmp(saved.trailer, t, sizeof t) == 0 && saved.part == target->address;
   dl->begin(m, resume ? saved.done : 0);
   savedDone = dl->done;
-  memcpy(source, p.mac, 6);
   heardSourceAt = now, wantAt = 0;
+  memset(source, 0, 6);
+  return true;
+}
+
+static void heardOffer(const LinkPacket &p) {
+  ota::Manifest m;
+  if (!ota::decodeOffer(p.data, p.len, m)) return;
+  const uint32_t now = millis();
+  if ((int32_t)(now - bannedUntil) < 0 && !memcmp(banned, p.mac, 6)) return;
+  const bool already = dl && !memcmp(dl->m.sha, m.sha, 32);
+  if (!acceptOffer(m)) return;
+  // A source to ask: the one we had while it's still heard, else this one.
+  static const uint8_t none[6] = {};
+  if (!already || !memcmp(source, none, 6) || !memcmp(source, p.mac, 6) || now - heardSourceAt > SOURCE_GONE_MS / 2)
+    memcpy(source, p.mac, 6), heardSourceAt = now;
 }
 
 static void answerWant(const LinkPacket &p) {
@@ -167,6 +183,7 @@ static void answerWant(const LinkPacket &p) {
 }
 
 static void takeData(const LinkPacket &p) {
+  if (streaming) return;
   uint8_t sha8[8];
   uint32_t offset;
   const uint8_t *bytes;
@@ -184,6 +201,47 @@ static void takeData(const LinkPacket &p) {
   wantAt = 0;  // the next window straight away
   if (dl->finished()) return finish();
   if (dl->done - savedDone >= SAVE_EVERY) saveProgress();
+}
+
+// ---- From the home server (home.cpp): the same checks, the bytes in order over HTTP.
+
+bool otaStreamOffer(const uint8_t trailer[ota::TRAILER]) {
+  ota::Manifest m;
+  if (!ota::parseTrailer(trailer, m) || !acceptOffer(m)) return false;
+  streaming = true;
+  heardSourceAt = millis();
+  return true;
+}
+
+uint32_t otaStreamAt() { return dl && streaming ? dl->done : UINT32_MAX; }
+uint32_t otaStreamRelease() { return dl && streaming ? dl->m.seq : 0; }
+
+bool otaStreamWrite(const uint8_t *bytes, size_t n) {
+  if (!dl || !streaming || dl->done + n > dl->m.size) return false;
+  if (!ota::Download::writeErased(dl->done, bytes, n,
+                                  [](uint32_t s) { return esp_partition_erase_range(target, s, ota::SECTOR) == ESP_OK; },
+                                  [](uint32_t at, const uint8_t *b, uint32_t len) {
+                                    return esp_partition_write(target, at, b, len) == ESP_OK;
+                                  })) {
+    clearDownload(true);
+    return false;
+  }
+  dl->done += n;
+  heardSourceAt = millis();
+  if (dl->finished()) {
+    finish();
+    streaming = false;
+    return true;
+  }
+  if (dl->done - savedDone >= SAVE_EVERY) saveProgress();
+  return true;
+}
+
+void otaStreamStop() {
+  if (!dl || !streaming) return;
+  saveProgress();
+  clearDownload(false);
+  streaming = false;
 }
 
 bool otaHeard(const LinkPacket &p) {
@@ -204,7 +262,7 @@ void otaTick() {
     linkBroadcast(pkt, ota::encodeOffer(mine, pkt));
     offerAt = now + OFFER_MS - 200 + esp_random() % 400;
   }
-  if (!dl) return;
+  if (!dl || streaming) return;
   if (now - heardSourceAt > SOURCE_GONE_MS) {  // out of reach: keep what came, carry on next time
     saveProgress();
     return clearDownload(false);
@@ -230,6 +288,7 @@ void otaInstallIfReady() {
       !ota::verify(there, OTA_PUBLIC_KEY) || !shaOf(next, m.size, sha) || memcmp(sha, m.sha, 32) != 0 ||
       esp_ota_set_boot_partition(next) != ESP_OK) {
     storageRemoveKey("ota_ready");
+    readyCache = 0;
     return;
   }
   storagePutInt("ota_tried", m.seq);
@@ -254,6 +313,13 @@ void otaBoot() {
     storageRemoveKey("ota_prog");
 }
 
+bool otaReady() {
+  ota::Manifest m;
+  if (readyCache < 0) readyCache = readyManifest(m);
+  return readyCache == 1;
+}
+uint32_t otaRelease() { return MY_SEQ; }
+
 bool otaEnabled() { return storageGetInt("ota_auto", 1) != 0; }
 void otaSetEnabled(bool on) { storagePutInt("ota_auto", on); }
 
@@ -272,9 +338,16 @@ void otaBoot() {
 #endif
 }
 bool otaHeard(const LinkPacket &p) { return false; }
+bool otaStreamOffer(const uint8_t *) { return false; }
+uint32_t otaStreamAt() { return UINT32_MAX; }
+uint32_t otaStreamRelease() { return 0; }
+bool otaStreamWrite(const uint8_t *, size_t) { return false; }
+void otaStreamStop() {}
 void otaTick() {}
 void otaInstallIfReady() {}
 bool otaEnabled() { return false; }
+bool otaReady() { return false; }
+uint32_t otaRelease() { return UNIDEX_OTA_SEQ; }
 void otaSetEnabled(bool) {}
 void otaStatus(char *out, size_t len) { snprintf(out, len, "unavailable"); }
 

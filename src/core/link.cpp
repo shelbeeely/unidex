@@ -92,6 +92,7 @@ const char *linkStart() {
   if (!queue) queue = xQueueCreate(16, sizeof(LinkPacket));
   netClaim(true);
   powerHold();  // light sleep would turn the radio off
+  netOff();     // a home WiFi connection (the home server, while charging) gives way: it can't change channel
   setCpuFrequencyMhz(CPU_FAST_MHZ);
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(false);  // modem sleep misses packets

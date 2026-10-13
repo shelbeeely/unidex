@@ -110,7 +110,10 @@ void powerSleepIfIdle() {
     onUsb = batteryCharging();
     lastCheck = millis();
   }
-  if (onUsb) return;
+  if (onUsb) {  // it never sleeps on USB: an update waiting is installed once it's been idle as long instead
+    if (otaReady()) otaInstallIfReady();
+    return;
+  }
   deepSleep(0);
 }
 

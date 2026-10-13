@@ -8,6 +8,7 @@
 #include "pet_logic.h"
 #include "held.h"
 #include "../house/house.h"
+#include "../house/home.h"
 #include "../../core/app.h"
 #include "../../core/devtools.h"
 #include "../../core/display.h"
@@ -290,6 +291,17 @@ static void drawMain() {
     drawAvatar(look, petWorn(), MAIN_SCALE, MAIN_Y, eyesShut);
   }
   if (heart) petDrawHeart(175, CONTENT_TOP + 16 + (talking ? 30 : 0), heart);  // beside the head
+  // Roommates' Pets that are home too (the home server, while charging: home.h), small, either side.
+  home::AtHome atHome[2];
+  const int n = homeAtHome(atHome, 2);
+  for (int i = 0; i < n; i++) {
+    const house::Record *m = house::member(houseData(), atHome[i].pet);
+    if (!m) continue;
+    const int16_t x = i ? display.width() - 34 : 2, y = HINTS_TOP - 36;
+    const items::Worn worn = houseWornOf(*m);
+    petDraw(m->a, 1, x, y, PetMood::Happy, nullptr, 0, &worn);
+    petDrawTag(fitText(m->text, 34).c_str(), x + 16, y - 1);
+  }
   drawHints("hi", "dress up", "meet");
 }
 

@@ -195,6 +195,27 @@ const char *houseCreditChore(const Record *before, const Record &after) {
 
 void houseAddNews(const char *text) { storagePutString("house_news", text); }
 
+items::Worn houseWornOf(const Record &m) {
+  items::Worn w = {};
+  uint32_t clothes[4];
+  wearOf(data, m.origin, clothes);
+  w.id[items::HAND] = m.d >> 8;
+  w.id[items::HAT] = clothes[0], w.id[items::ACCESSORY] = clothes[1];
+  w.id[items::HAIR] = clothes[2], w.id[items::OUTFIT] = clothes[3];
+  return w;
+}
+
+void houseHeardChange(const Record &r, const Record *old) {
+  char text[64];
+  if (r.kind == CHORE && old && r.d != old->d && r.c && r.c != data.me && !(r.flags & DELETED)) {
+    snprintf(text, sizeof text, "%s did %s! Yay!", nameOf(data, r.c), r.text);
+    houseAddNews(text);
+  } else if (r.kind == MESSAGE && !old && r.origin != data.me) {
+    snprintf(text, sizeof text, "%s says: %s", nameOf(data, r.origin), r.text);
+    houseAddNews(text);
+  }
+}
+
 bool houseNews(char *out, size_t len) {
   const String n = storageGetString("house_news");
   if (!n.length()) return false;
