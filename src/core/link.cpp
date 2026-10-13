@@ -13,7 +13,8 @@
 static const uint8_t CHANNEL = 1;  // every unidex listens on the same channel
 static const uint8_t BROADCAST[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 static QueueHandle_t queue;  // packets from the WiFi task to the main loop
-static bool on;
+static bool on, sharing;
+static uint8_t channel;
 
 // The receive callback on this core doesn't give the signal strength, so the radio also listens to every frame
 // (promiscuous mode, management frames only) and notes the strength of each ESP-NOW frame by its sender. Both
@@ -74,7 +75,7 @@ static bool addPeer(const uint8_t mac[6]) {
   if (esp_now_is_peer_exist(mac)) return true;
   esp_now_peer_info_t peer = {};
   memcpy(peer.peer_addr, mac, 6);
-  peer.channel = CHANNEL;
+  peer.channel = 0;  // whichever the radio is on (it can move: linkSetChannel)
   peer.ifidx = WIFI_IF_STA;
   if (esp_now_add_peer(&peer) == ESP_ERR_ESPNOW_FULL) {  // 20 at most: forget the others, keep broadcast
     esp_now_peer_info_t p;
@@ -85,25 +86,32 @@ static bool addPeer(const uint8_t mac[6]) {
   return esp_now_is_peer_exist(mac);
 }
 
-const char *linkStart() {
+const char *linkStart(LinkMode mode, uint8_t ch) {
   if (on) return nullptr;
   if (netClaimed()) return "WiFi busy: a note is sending";
   if (const char *low = batteryTooLow()) return low;
   if (!queue) queue = xQueueCreate(16, sizeof(LinkPacket));
+  sharing = mode == LinkMode::HOUSEHOLD && WiFi.status() == WL_CONNECTED;  // at home, charging: keep the WiFi
   netClaim(true);
   powerHold();  // light sleep would turn the radio off
-  netOff();     // a home WiFi connection (the home server, while charging) gives way: it can't change channel
   setCpuFrequencyMhz(CPU_FAST_MHZ);
-  WiFi.mode(WIFI_STA);
+  if (sharing) {
+    channel = WiFi.channel();  // the WiFi's: it can't change while connected (nor can the address)
+  } else {
+    netOff();  // a home WiFi connection gives way to meeting in person
+    WiFi.mode(WIFI_STA);
+    uint8_t mac[6];
+    esp_fill_random(mac, sizeof mac);
+    mac[0] = (mac[0] & 0xFC) | 0x02;  // locally administered, single device
+    esp_wifi_set_mac(WIFI_IF_STA, mac);
+    channel = mode == LinkMode::HOUSEHOLD && ch >= 1 && ch <= 13 ? ch : CHANNEL;
+    esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
+  }
   WiFi.setSleep(false);  // modem sleep misses packets
-  uint8_t mac[6];
-  esp_fill_random(mac, sizeof mac);
-  mac[0] = (mac[0] & 0xFC) | 0x02;  // locally administered, single device
-  esp_wifi_set_mac(WIFI_IF_STA, mac);
-  esp_wifi_set_channel(CHANNEL, WIFI_SECOND_CHAN_NONE);
   if (esp_now_init() != ESP_OK || esp_now_register_recv_cb(onReceive) != ESP_OK || !addPeer(BROADCAST)) {
     esp_now_deinit();
-    netOff();
+    if (!sharing) netOff();
+    sharing = false;
     netClaim(false);
     powerRelease();
     return "The radio didn't start";
@@ -123,12 +131,23 @@ void linkStop() {
   on = false;
   esp_wifi_set_promiscuous(false);
   esp_now_deinit();
-  netOff();
+  if (sharing) WiFi.setSleep(true);  // back to the home server's modem sleep, still connected
+  else netOff();
+  sharing = false;
   netClaim(false);
   powerRelease();
 }
 
 bool linkOn() { return on; }
+bool linkSharesWifi() { return on && sharing; }
+uint8_t linkChannel() { return on ? channel : 0; }
+
+bool linkSetChannel(uint8_t ch) {
+  if (!on || sharing || ch < 1 || ch > 13) return false;
+  if (ch != channel && esp_wifi_set_channel(ch, WIFI_SECOND_CHAN_NONE) != ESP_OK) return false;
+  channel = ch;
+  return true;
+}
 
 bool linkBroadcast(const uint8_t *data, size_t len) {
   return on && len <= ESP_NOW_MAX_DATA_LEN && esp_now_send(BROADCAST, data, len) == ESP_OK;

@@ -15,7 +15,8 @@ What it does (the X4's side is src/apps/house/home.cpp; the layout is src/apps/h
   server never has the household key, so it can't read the WiFi passwords (sealed with that key), and it can't
   sign firmware: each X4 checks a release's signature against the key built into it before it installs anything.
 - Firmware: every signed .bin in --updates (default ./roomiepet-data/updates), plus, with --github, the X4 firmware
-  attached to that repository's newest release (checked hourly).
+  attached to that repository's newest release (checked hourly), plus (with --pub, so it can check them) releases an X4
+  brings home: it asks that X4 to upload it, and offers it to the others as they check in (a relay).
 
 Plain HTTP is fine on a home network (and works across the internet too: everything that matters is sealed or
 signed). The data is kept in --data (default ./roomiepet-data): the household's records in JSON, readable by whoever
@@ -35,6 +36,14 @@ TRAILER = 128            # ota_logic.h's TRAILER
 OWNER_ONLY = {8, 9, 10}  # house_logic.h's ownerOnly: $cashtag, payment requests, catalog clothes
 MAX_ANSWER_RECORDS = 120  # house_logic.h's MAX_RECORDS: an X4 can't take more in one answer
 HOME_FOR = 600           # seconds a Pet counts as home after it checks in
+CAN_RELAY = 2            # home_logic.h's flag: the X4 runs a signed release it can upload
+RELAY_IDLE = 600         # seconds an unfinished relay waits for its X4 before another may take over
+MAX_UPLOAD = 8 * 1024 * 1024
+
+
+def read_file(path):
+    with open(path, "rb") as f:
+        return f.read()
 
 
 # ---- The envelope (home_logic.h).
@@ -116,7 +125,7 @@ def image_length(d):
 
 def read_release(path, public_key=None):
     """(seq, version, trailer, length) of a signed X4 firmware file, or None."""
-    d = open(path, "rb").read()
+    d = read_file(path)
     n = image_length(d)
     t = d[n:n + TRAILER]
     if not n or len(t) != TRAILER or t[:8] != b"RPOTA1\0\0":
@@ -146,7 +155,7 @@ class Releases:
     def scan(self):
         found = {}
         for name in sorted(os.listdir(self.folder)):
-            if name.endswith(".bin"):
+            if name.endswith(".bin") and not name.startswith("."):
                 r = read_release(os.path.join(self.folder, name), self.public_key)
                 if r:
                     found[r[0]] = (os.path.join(self.folder, name),) + r
@@ -160,6 +169,67 @@ class Releases:
     def get(self, seq):
         with self.lock:
             return self.by_seq.get(seq)
+
+
+class Relays:
+    """Releases that reach the household on an X4 first (from another X4 at the park, say): the server asks that X4
+    for it (a ticket in its answer) and offers it to the others once its signature checks out, so every X4 gets it
+    when it next checks in. Only with the release key (--pub): an upload the server can't check is never offered."""
+
+    def __init__(self, releases):
+        self.releases, self.tickets, self.lock = releases, {}, threading.Lock()
+
+    def ticket_for(self, pet, seq, now=None):
+        if self.releases.public_key is None:
+            return None
+        now = now or time.time()
+        with self.lock:
+            for t, v in list(self.tickets.items()):
+                if now - v["active"] > RELAY_IDLE:
+                    self.drop(t)
+            for t, v in self.tickets.items():
+                if v["seq"] == seq:  # one X4 uploads a release at a time
+                    return bytes.fromhex(t) if v["pet"] == pet else None
+            t = os.urandom(16).hex()
+            path = os.path.join(self.releases.folder, ".relay-%s.part" % t)
+            open(path, "wb").close()
+            self.tickets[t] = {"seq": seq, "pet": pet, "path": path, "active": now}
+            return bytes.fromhex(t)
+
+    def drop(self, t):
+        v = self.tickets.pop(t, None)
+        if v and os.path.exists(v["path"]):
+            os.remove(v["path"])
+
+    def put(self, t, offset, data):
+        """A piece of an upload: (HTTP status, body)."""
+        with self.lock:
+            v = self.tickets.get(t)
+            if not v:
+                return 404, b"no such relay"
+            size = os.path.getsize(v["path"])
+            if offset != size:  # pieces in order: say where to carry on from
+                return 200, b"next %d" % size
+            if size + len(data) > MAX_UPLOAD:
+                self.drop(t)
+                return 413, b"too big"
+            with open(v["path"], "ab") as f:
+                f.write(data)
+            v["active"] = time.time()
+            d = read_file(v["path"])
+            n = image_length(d)
+            if not n or len(d) < n + TRAILER:
+                return 200, b"next %d" % len(d)
+            r = read_release(v["path"], self.releases.public_key)
+            if not r or r[0] != v["seq"] or len(d) != n + TRAILER:
+                self.drop(t)
+                return 422, b"not a release signed with the release key"
+            name = "x4-%s-relayed.bin" % re.sub(r"[^\w.\-]", "_", r[1])
+            os.replace(v["path"], os.path.join(self.releases.folder, name))
+            self.tickets.pop(t)
+        self.releases.scan()
+        print(f"relayed {r[1]} from an X4", flush=True)
+        return 200, b"done"
 
 
 def fetch_github(repo, folder, releases):
@@ -188,7 +258,7 @@ class Households:
         self.folder, self.lock = folder, threading.Lock()
         os.makedirs(folder, exist_ok=True)
         self.config_path = os.path.join(folder, "households.json")
-        self.config = json.load(open(self.config_path)) if os.path.exists(self.config_path) else {}
+        self.config = json.loads(read_file(self.config_path)) if os.path.exists(self.config_path) else {}
         self.state = {}
 
     def add(self, house_id, token_hex):
@@ -212,7 +282,7 @@ class Households:
         name = "%08x" % house_id
         if name not in self.state:
             path = os.path.join(self.folder, name + ".json")
-            self.state[name] = json.load(open(path)) if os.path.exists(path) else {}
+            self.state[name] = json.loads(read_file(path)) if os.path.exists(path) else {}
             for k in ("records", "networks", "numbers", "seen"):
                 self.state[name].setdefault(k, {})
         return self.state[name]
@@ -224,7 +294,7 @@ class Households:
         os.replace(path + ".tmp", path)
 
 
-def handle_sync(households, releases, body, now=None):
+def handle_sync(households, releases, body, now=None, relays=None):
     """One check-in: (HTTP status, response body)."""
     now = int(now or time.time())
     if len(body) < HEAD or body[:4] != MAGIC:
@@ -270,10 +340,15 @@ def handle_sync(households, releases, body, now=None):
         out += b"\x01" + newest[3]
     else:
         out += b"\x00"
+    # A newer release than any here, on an X4 that can upload it: ask for it, for the others.
+    ticket = None
+    if relays and flags & CAN_RELAY and release > (newest[1] if newest else 0):
+        ticket = relays.ticket_for(pet, release, now)
+    out += b"\x01" + ticket if ticket else b"\x00"
     return 200, seal_answer(token, body, bytes(out))
 
 
-def make_handler(households, releases):
+def make_handler(households, releases, relays=None):
     class Handler(BaseHTTPRequestHandler):
         server_version = "RoomiePet/1"
 
@@ -292,14 +367,21 @@ def make_handler(households, releases):
             n = int(self.headers.get("Content-Length", 0))
             if not 0 < n <= 64 * 1024:
                 return self.reply(413, b"")
-            self.reply(*handle_sync(households, releases, self.rfile.read(n)))
+            self.reply(*handle_sync(households, releases, self.rfile.read(n), relays=relays))
+
+        def do_PUT(self):
+            m = re.fullmatch(r"/v1/upload/([0-9a-f]{32})", self.path)
+            n = int(self.headers.get("Content-Length", 0))
+            if not m or not relays or not 0 < n <= 64 * 1024 or not self.headers.get("X-Offset", "").isdigit():
+                return self.reply(400, b"")
+            self.reply(*relays.put(m.group(1), int(self.headers["X-Offset"]), self.rfile.read(n)))
 
         def do_GET(self):
             m = re.fullmatch(r"/v1/firmware/(\d+)", self.path)
             rel = releases.get(int(m.group(1))) if m and releases else None
             if not rel:
                 return self.reply(404, b"")
-            data = open(rel[0], "rb").read()[:rel[4]]
+            data = read_file(rel[0])[:rel[4]]
             rng = re.fullmatch(r"bytes=(\d+)-(\d*)", self.headers.get("Range", ""))
             if not rng:
                 return self.reply(200, data)
@@ -351,7 +433,7 @@ def main():
         sys.exit("no households yet: --add-household <id> <token> (the web app's Home server card shows them)")
     pub = None
     if a.pub:
-        pub = bytes(int(x, 16) for x in re.findall(r"0x([0-9a-f]{2})", open(a.pub).read().split("OTA_PUBLIC_KEY")[1]))
+        pub = bytes(int(x, 16) for x in re.findall(r"0x([0-9a-f]{2})", read_file(a.pub).decode().split("OTA_PUBLIC_KEY")[1]))
     releases = Releases(a.updates or os.path.join(a.data, "updates"), pub)
     stop = threading.Event()
     if a.github:
@@ -365,7 +447,10 @@ def main():
     newest = releases.newest()
     print(f"RoomiePet home server on port {a.port}: {len(households.config)} household(s), "
           f"firmware {newest[2] if newest else 'none'}", flush=True)
-    ThreadingHTTPServer(("", a.port), make_handler(households, releases)).serve_forever()
+    relays = Relays(releases)
+    if pub is None:
+        print("no --pub: X4s won't be asked to relay releases they bring home (the server can't check them)", flush=True)
+    ThreadingHTTPServer(("", a.port), make_handler(households, releases, relays)).serve_forever()
 
 
 if __name__ == "__main__":

@@ -7,6 +7,9 @@
 const char *netConnect();  // nullptr when connected, else a short reason for the screen
 const char *netBegin();    // starts connecting and returns at once (netConnect() then waits for it)
 void netOff();
+// The channel of the strongest WiFi this device knows (its own, or one its household shares) that's in range, 0 if
+// none: where roommates' X4s at home are (connected ones can't leave their WiFi's channel). A scan: about 2 s.
+uint8_t netHomeChannel();
 void netClaim(bool on);  // background work (a note sending) owns the WiFi: others must not turn it off
 bool netClaimed();
 

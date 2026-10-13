@@ -27,7 +27,8 @@ static const uint8_t MAGIC[4] = {'R', 'P', 'S', '1'};
 static const size_t HEAD = 16, OVERHEAD = HEAD + secure::NONCE + secure::TAG;
 static const uint16_t DISCOVERY_PORT = 47474;  // "RPHOME?" broadcast here; the server answers "RPHOME <port>"
 static const uint8_t PAYLOAD_VERSION = 1;
-enum Flags : uint8_t { ON_USB = 1 };
+enum Flags : uint8_t { ON_USB = 1, CAN_RELAY = 2 };  // CAN_RELAY: it runs a signed release it can upload
+static const size_t TICKET = 16;
 
 inline void serverToken(const uint8_t houseKey[secure::KEY], uint8_t out[secure::KEY]) {
   secure::derive(houseKey, "RoomiePet home server", out);
@@ -80,7 +81,11 @@ inline bool openAnswer(const uint8_t token[secure::KEY], const uint8_t *request,
 //   request: version u8, release u32, flags u8, records u16 + each (house_logic.h's RECORD_LEN), networks u8 + each
 //            (secure_logic.h's NETWORK_LEN)
 //   answer:  version u8, time u32 (unix), records u16 + each, networks u8 + each, home u8 + each (pet u32, seconds
-//            since it checked in u32, flags u8), release u8 (0 or 1) + its 128-byte trailer (ota_logic.h)
+//            since it checked in u32, flags u8), release u8 (0 or 1) + its 128-byte trailer (ota_logic.h), then
+//            (if the X4 runs a signed release newer than any the server has) relay u8 (0 or 1) + a ticket (16): the
+//            X4 then uploads it (PUT /v1/upload/<ticket hex>, X-Offset: <bytes so far>; the answer "next <n>" or
+//            "done"), so the server can pass it to roommates' X4s as they check in. The server checks the
+//            signature itself before it offers a relayed release.
 
 struct Writer {
   uint8_t *p;

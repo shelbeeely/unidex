@@ -35,6 +35,9 @@ static home::AtHome present[8];
 static int presentCount;
 static uint32_t presentAt;  // millis() of the answer `present` came in
 static uint32_t number, numberUpTo;  // the request number, and how far NVS has it reserved
+static uint8_t ticket[home::TICKET];  // the server asked for this X4's release (a relay): where to upload it
+static bool relaying;
+static uint32_t relayAt, relayRetryAt;
 
 static void setStatus(const char *s) { strlcpy(status, s, sizeof status); }
 
@@ -43,12 +46,13 @@ static bool usbPower() {
   return onUsb;
 }
 
-// Something else has the WiFi (the radio, the phone hotspot, a transfer): leave it alone.
-static bool wifiBusy() { return linkOn() || hotspotOn() || netClaimed(); }
+// Something else has the WiFi (the radio for Meet, the phone hotspot, a transfer): leave it alone. The radio for
+// the household's Sync rides on the home WiFi while it's connected (link.h): then this carries on beside it.
+static bool wifiBusy() { return hotspotOn() || (linkOn() ? !linkSharesWifi() : netClaimed()); }
 
 static void stop(bool turnOff) {
   otaStreamStop();
-  if (turnOff && !wifiBusy()) netOff();
+  if (turnOff && !linkOn() && !hotspotOn() && !netClaimed()) netOff();  // never under the radio's feet
   if (held) powerRelease(), held = false;
   state = OFF;
   serverPort = 0;
@@ -146,7 +150,8 @@ static void checkIn() {
   home::Writer w(payload, cap);
   w.u8(home::PAYLOAD_VERSION);
   w.u32(otaRelease());
-  w.u8(home::ON_USB);
+  uint32_t myRelease, myBytes;
+  w.u8(home::ON_USB | (otaMine(myRelease, myBytes) ? home::CAN_RELAY : 0));
   w.u16(h.count);
   uint8_t rec[RECORD_LEN];
   for (int i = 0; i < h.count; i++) encodeRecord(h.r[i], rec), w.bytes(rec, RECORD_LEN);
@@ -196,6 +201,12 @@ static void checkIn() {
       presentAt = millis();
       if (r.u8() == 1)
         if (const uint8_t *t = r.bytes(ota::TRAILER)) otaStreamOffer(t);
+      if (r.at < r.n && r.u8() == 1)  // relay: the server wants this X4's release, for the others
+        if (const uint8_t *t = r.bytes(home::TICKET)) {
+          if (!relaying || memcmp(ticket, t, sizeof ticket)) relayAt = 0;
+          memcpy(ticket, t, sizeof ticket);
+          relaying = true;
+        }
       noteArrivals(was, wasCount);
       if (wasCount != presentCount || memcmp(was, present, presentCount * sizeof(home::AtHome))) petChanged();
       firstCheck = false;
@@ -226,6 +237,41 @@ static void fetchBlock() {
   http.end();
   if (!got || !otaStreamWrite(buf, got)) fetchAt = millis() + 30000;  // try again in a while
   free(buf);
+}
+
+// The next piece of this X4's release, up to the server (a relay it asked for).
+static void relayBlock() {
+  uint32_t release, total;
+  if (!relaying || (int32_t)(millis() - relayRetryAt) < 0 || !otaMine(release, total)) return;
+  const size_t n = total - relayAt < BLOCK ? total - relayAt : BLOCK;
+  uint8_t *buf = (uint8_t *)malloc(BLOCK);
+  if (!buf) return;
+  char path[48], offset[12], reply[24] = "";
+  snprintf(path, sizeof path, "/v1/upload/");
+  for (int i = 0; i < (int)home::TICKET; i++) snprintf(path + 11 + 2 * i, 3, "%02x", ticket[i]);
+  snprintf(offset, sizeof offset, "%lu", (unsigned long)relayAt);
+  int code = -1;
+  if (n && otaReadMine(relayAt, buf, n)) {
+    HTTPClient http;
+    http.setTimeout(5000);
+    http.begin(serverIp.toString(), serverPort, path);
+    http.addHeader("Content-Type", "application/octet-stream");
+    http.addHeader("X-Offset", offset);
+    code = http.PUT(buf, n);
+    if (code == 200) readBody(http, (uint8_t *)reply, sizeof reply - 1);
+    http.end();
+  }
+  free(buf);
+  if (code == 200 && !strncmp(reply, "next ", 5)) {
+    relayAt = strtoul(reply + 5, nullptr, 10);  // where the server is (it may have more from before)
+  } else if (code == 200 && !strncmp(reply, "done", 4)) {
+    relaying = false;
+    setStatus("relayed the update");
+  } else if (code >= 400 && code < 500) {
+    relaying = false;  // the ticket's gone (another roommate's X4 got there first, or it expired)
+  } else {
+    relayRetryAt = millis() + 30000;
+  }
 }
 
 void homePoll() {
@@ -267,6 +313,8 @@ void homePoll() {
       if ((int32_t)(now - nextCheckAt) >= 0) {
         checkIn();
         nextCheckAt = millis() + CHECK_MS;
+      } else if (relaying) {
+        relayBlock();
       } else {
         fetchBlock();
       }

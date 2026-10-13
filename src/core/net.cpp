@@ -56,6 +56,29 @@ static bool pickNetwork(String &ssid, String &pass) {
   return ssid.length() > 0;
 }
 
+uint8_t netHomeChannel() {
+#if UNIDEX_X4
+  char s[33], p[64];
+  const String own = credGet("wifi_ssid");
+  if (!secretsNetwork(0, s, p) && !own.length()) return 0;
+  WiFi.mode(WIFI_STA);
+  const int found = WiFi.scanNetworks(false, false, false, 120);
+  int best = -1000;
+  uint8_t ch = 0;
+  for (int i = 0; i < found; i++) {
+    const String seen = WiFi.SSID(i);
+    bool known = own.length() && seen == own;
+    for (int k = 0; !known && secretsNetwork(k, s, p); k++) known = seen == s;
+    if (known && WiFi.RSSI(i) > best) best = WiFi.RSSI(i), ch = WiFi.channel(i);
+  }
+  WiFi.scanDelete();
+  WiFi.mode(WIFI_OFF);
+  return ch;
+#else
+  return 0;
+#endif
+}
+
 const char *netBegin() {
   String ssid, shared;
   if (!begun && WiFi.status() != WL_CONNECTED) {

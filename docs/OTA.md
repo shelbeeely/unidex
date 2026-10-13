@@ -1,6 +1,6 @@
 # Updates between X4s (RoomiePet)
 
-An X4 on an older release takes a newer one from the home server while it's charging at home ([HOMESERVER.md](HOMESERVER.md)), or from any X4 it syncs with (House, Sync) or meets (Pet, hold B), over
+An X4 on an older release takes a newer one from the home server while it's charging at home ([HOMESERVER.md](HOMESERVER.md): a release one X4 brings home is relayed through it to the rest), or from any X4 it syncs with (House, Sync) or meets (Pet, hold B), over
 the same radio (ESP-NOW), and installs it the next time it goes to sleep. One roommate updates over USB, and the whole
 household follows at the next Sync, without a computer. The Waveshare board (unidex) isn't part of this.
 

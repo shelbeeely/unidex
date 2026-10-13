@@ -313,6 +313,15 @@ void otaBoot() {
     storageRemoveKey("ota_prog");
 }
 
+bool otaMine(uint32_t &release, uint32_t &bytes) {
+  if (!mineChecked) checkMine();
+  release = shareable ? mine.seq : 0, bytes = shareable ? mine.size + ota::TRAILER : 0;
+  return shareable;
+}
+bool otaReadMine(uint32_t at, uint8_t *buf, size_t n) {
+  return shareable && at + n <= mine.size + ota::TRAILER && readPart(esp_ota_get_running_partition(), at, buf, n);
+}
+
 bool otaReady() {
   ota::Manifest m;
   if (readyCache < 0) readyCache = readyManifest(m);
@@ -347,6 +356,8 @@ void otaTick() {}
 void otaInstallIfReady() {}
 bool otaEnabled() { return false; }
 bool otaReady() { return false; }
+bool otaMine(uint32_t &release, uint32_t &bytes) { return release = bytes = 0, false; }
+bool otaReadMine(uint32_t, uint8_t *, size_t) { return false; }
 uint32_t otaRelease() { return UNIDEX_OTA_SEQ; }
 void otaSetEnabled(bool) {}
 void otaStatus(char *out, size_t len) { snprintf(out, len, "unavailable"); }

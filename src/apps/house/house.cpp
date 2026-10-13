@@ -16,6 +16,8 @@
 #include "../../core/display.h"
 #include "../../core/launcher.h"
 #include "../../core/link.h"
+#include "../../core/net.h"
+#include <WiFi.h>
 #include "../../core/power.h"
 #include "../../core/storage.h"
 #include "../../core/theme.h"
@@ -526,6 +528,11 @@ struct Heard {
 static Heard heard[MAX_MEMBERS];
 static int heardCount, changes, sendAt;
 static uint32_t nextHelloAt, nextSendAt, lastPressAt, savedAt, joinHouse, joinClock;
+// Looking for roommates on other channels (link.h): a roommate's X4 on the home WiFi can't leave its channel, so
+// one that hears nobody for a few seconds tries the others, the usual WiFi channels first, and stays where it hears.
+static const uint8_t SWEEP[] = {1, 6, 11, 2, 3, 4, 5, 7, 8, 9, 10, 12, 13};
+static uint32_t heardAt, hopAt;
+static uint8_t hop;
 static char joinName[NAME + 1];
 static uint32_t drawnAt;
 static bool syncing, dirty, stale;  // stale: something to show that isn't on the screen yet
@@ -538,8 +545,11 @@ static void syncStart() {
   dirty = false;
   nextHelloAt = nextSendAt = millis();
   lastPressAt = millis();
-  syncError = linkStart();
+  // At home, roommates are on the home WiFi's channel: stay connected and use it (charging), or go there.
+  const uint8_t home = WiFi.status() == WL_CONNECTED ? 0 : netHomeChannel();
+  syncError = linkStart(LinkMode::HOUSEHOLD, home);
   syncing = !syncError;
+  heardAt = hopAt = millis(), hop = 0;
   secretsSyncStart();
 }
 
@@ -587,6 +597,11 @@ static Redraw syncTick() {
   Hello hi;
   otaTick();  // firmware updates between X4s, while the radio is on (core/ota.h)
   secretsTick();  // the household key and the shared WiFi networks (secrets.h)
+  if (!linkSharesWifi() && now - heardAt > 5000 && (int32_t)(now - hopAt) >= 0) {  // nobody here: another channel
+    linkSetChannel(SWEEP[hop++ % sizeof SWEEP]);
+    hopAt = now + 1200;
+    stale = true;
+  }
   const bool asking = secretsAsking();
   while (linkPoll(p)) {
     if (otaHeard(p)) continue;
@@ -597,6 +612,7 @@ static Redraw syncTick() {
     if (itemsHeard(p.data, p.len)) continue;  // a thing to hold, passed on (held.h)
     if (decodeHello(p.data, p.len, hi)) {
       if (hi.id == h.me) continue;
+      heardAt = now;
       itemsNoteDigest(hi.items);
       int k = 0;
       while (k < heardCount && heard[k].id != hi.id) k++;
@@ -645,7 +661,9 @@ static Redraw syncTick() {
 
 static void drawSync() {
   House &h = houseData();
-  drawHeader("Sync", syncing ? "radio on" : "");
+  char radio[24] = "";
+  if (syncing) snprintf(radio, sizeof radio, "%s ch %u", millis() - heardAt > 5000 ? "looking," : "radio on,", linkChannel());
+  drawHeader("Sync", radio);
   display.setFont(FONT_SMALL);
   if (syncError) {
     drawEmpty("Can't sync", syncError);

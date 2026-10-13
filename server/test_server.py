@@ -33,8 +33,8 @@ def network(nid, ver, editor=PIP):
     return bytes(n)
 
 
-def payload(release=0, records=(), nets=()):
-    return (bytes([1]) + struct.pack("<IB", release, 1) + struct.pack("<H", len(records)) + b"".join(records) +
+def payload(release=0, records=(), nets=(), flags=1):
+    return (bytes([1]) + struct.pack("<IB", release, flags) + struct.pack("<H", len(records)) + b"".join(records) +
             bytes([len(nets)]) + b"".join(nets))
 
 
@@ -57,11 +57,14 @@ def parse(answer):
     nets = [r.take(srv.NETWORK_LEN) for _ in range(r.u8())]
     home = [struct.unpack("<IIB", r.take(9)) for _ in range(r.u8())]
     trailer = r.take(128) if r.u8() == 1 else None
+    parse.ticket = r.take(16) if r.u8() == 1 else None
+    assert r.at == len(answer)
     return t, recs, nets, home, trailer
 
 
-def fake_release(folder, seq, version):
-    """A small signed-looking X4 image (the server checks the hash, the X4 the signature)."""
+def fake_release(folder, seq, version, key=None):
+    """A small X4 image with its trailer: signed with `key` (a P-256 private key), else a random signature (the
+    server checks the hash, the X4 the signature)."""
     seg = struct.pack("<II", 0x3C000000, 5000) + os.urandom(5000)
     head = bytearray(24)
     head[0], head[1], head[23] = 0xE9, 1, 1
@@ -69,9 +72,17 @@ def fake_release(folder, seq, version):
     img += b"\0" * ((len(img) + 1 + 15) // 16 * 16 - len(img) - 1) + b"\xEF"
     img += hashlib.sha256(img).digest()
     t = b"RPOTA1\0\0" + struct.pack("<II", seq, len(img)) + hashlib.sha256(img).digest() + version.encode().ljust(16, b"\0")
-    t += os.urandom(64)
-    with open(os.path.join(folder, f"x4-{version}.bin"), "wb") as f:
-        f.write(img + t)
+    if key:
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.asymmetric import ec
+        from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
+        r_, s_ = decode_dss_signature(key.sign(t, ec.ECDSA(hashes.SHA256())))
+        t += r_.to_bytes(32, "big") + s_.to_bytes(32, "big")
+    else:
+        t += os.urandom(64)
+    if folder:
+        with open(os.path.join(folder, f"x4-{version}.bin"), "wb") as f:
+            f.write(img + t)
     return img + t
 
 
@@ -80,8 +91,13 @@ class ServerTest(unittest.TestCase):
         self.dir = tempfile.mkdtemp()
         self.homes = srv.Households(self.dir)
         self.homes.add(HOUSE, TOKEN.hex())
-        self.releases = srv.Releases(os.path.join(self.dir, "updates"))
-        self.http = ThreadingHTTPServer(("127.0.0.1", 0), srv.make_handler(self.homes, self.releases))
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric import ec
+        self.key = ec.generate_private_key(ec.SECP256R1())  # stands in for the release key
+        pub = self.key.public_key().public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
+        self.releases = srv.Releases(os.path.join(self.dir, "updates"), pub)
+        self.relays = srv.Relays(self.releases)
+        self.http = ThreadingHTTPServer(("127.0.0.1", 0), srv.make_handler(self.homes, self.releases, self.relays))
         threading.Thread(target=self.http.serve_forever, daemon=True).start()
         self.url = "http://127.0.0.1:%d" % self.http.server_address[1]
 
@@ -154,7 +170,7 @@ class ServerTest(unittest.TestCase):
             open_answer(req2, ans1)
 
     def test_firmware_offered_and_downloaded_in_pieces(self):
-        data = fake_release(self.releases.folder, 1005000, "v1.5")
+        data = fake_release(self.releases.folder, 1005000, "v1.5", self.key)
         self.releases.scan()
         _, _, _, _, trailer = self.sync(PIP, 1, payload(release=1004000))
         self.assertEqual(trailer[8:12], struct.pack("<I", 1005000), "a newer release is offered")
@@ -173,6 +189,46 @@ class ServerTest(unittest.TestCase):
         open(os.path.join(self.releases.folder, "broken.bin"), "wb").write(bad)
         self.releases.scan()
         self.assertEqual(len(self.releases.by_seq), 1, "a file whose hash is wrong isn't offered")
+
+    def put(self, ticket, offset, data):
+        req = urllib.request.Request(self.url + "/v1/upload/" + ticket.hex(), data=data, method="PUT",
+                                     headers={"X-Offset": str(offset)})
+        try:
+            with urllib.request.urlopen(req, timeout=5) as r:
+                return r.status, r.read()
+        except urllib.error.HTTPError as e:
+            return e.code, e.read()
+
+    def test_relay_a_release_brought_home(self):
+        # Pip's X4 got v1.6 from another X4 at the park; the server has nothing newer than v1.5.
+        fake_release(self.releases.folder, 1005000, "v1.5", self.key)
+        self.releases.scan()
+        v16 = fake_release(None, 1006000, "v1.6", self.key)
+        self.sync(PIP, 1, payload(release=1006000, flags=1))
+        self.assertIsNone(parse.ticket, "not asked: it didn't say it can upload")
+        self.sync(PIP, 2, payload(release=1006000, flags=3))
+        ticket = parse.ticket
+        self.assertIsNotNone(ticket, "asked for it")
+        self.sync(BISCUIT, 1, payload(release=1006000, flags=3))
+        self.assertIsNone(parse.ticket, "one X4 uploads a release at a time")
+        self.assertEqual(self.put(ticket, 0, v16[:3000]), (200, b"next 3000"))
+        self.assertEqual(self.put(ticket, 1000, v16[1000:2000]), (200, b"next 3000"), "out of order: where to carry on")
+        self.assertEqual(self.put(ticket, 3000, v16[3000:]), (200, b"done"))
+        self.assertEqual(self.put(ticket, 0, b"x"), (404, b"no such relay"), "the ticket is spent")
+        _, _, _, _, trailer = self.sync(BISCUIT, 2, payload(release=1005000))
+        self.assertEqual(trailer[8:12], struct.pack("<I", 1006000), "and roommates' X4s are offered it")
+
+    def test_relay_refuses_what_isnt_signed(self):
+        self.sync(PIP, 1, payload(release=1006000, flags=3))
+        forged = fake_release(None, 1006000, "v1.6")  # a random signature
+        code, _ = self.put(parse.ticket, 0, forged)
+        self.assertEqual(code, 422)
+        self.assertEqual(self.releases.by_seq, {}, "never offered")
+
+    def test_no_relay_without_the_release_key(self):
+        self.releases.public_key = None
+        self.sync(PIP, 1, payload(release=1006000, flags=3))
+        self.assertIsNone(parse.ticket)
 
     def test_discovery(self):
         stop = threading.Event()

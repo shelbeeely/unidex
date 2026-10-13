@@ -25,5 +25,9 @@ uint32_t otaStreamRelease();  // which release is coming, 0 if none
 bool otaStreamWrite(const uint8_t *bytes, size_t n);
 void otaStreamStop();
 uint32_t otaRelease();  // this firmware's release number (0: not a release)
+// This X4's own release, if it's signed (it offers it over the radio, and can relay it to the home server): its
+// release number and its bytes with the trailer, read from where it runs.
+bool otaMine(uint32_t &release, uint32_t &bytes);
+bool otaReadMine(uint32_t at, uint8_t *buf, size_t n);
 // For Settings and the web app: "v1.5 ready", "getting v1.5 40%", "on", "off", or "unavailable".
 void otaStatus(char *out, size_t len);

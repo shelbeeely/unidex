@@ -43,7 +43,7 @@ They spread at Sync (one a beat) and through the home server; the newest change 
 ```sh
 pip install cryptography
 python3 server/roomiepet_server.py --add-household <id> <token>   # once: the web app shows the line to copy
-python3 server/roomiepet_server.py --github <owner>/<repo>         # then run it (as a service, say)
+python3 server/roomiepet_server.py --github <owner>/<repo> --pub src/core/ota_key.h   # then run it (as a service)
 ```
 
 In the web app, **Settings > Home server > Set up the server** shows the `--add-household` line. The token is made
@@ -57,7 +57,22 @@ web app (for a server elsewhere, or a network that blocks broadcasts). It listen
 | **Household** | Each X4 sends its records and the shared networks; the server keeps the newest of each (with the X4's rules: a $cashtag, a payment request or catalog clothes only from their owner) and answers with what that X4 is missing. |
 | **Who's home** | Every Pet that checked in within 10 minutes. X4s show roommates' Pets from the last 3. The web app marks them on Roommates. |
 | **The time** | The server's clock sets an X4's when that's better (as a roommate's does at Sync). |
+| **Relaying** | A release that reaches the household on an X4 first (from another X4 at the park, say) goes up to the server when that X4 next checks in. The server asks for it, checks the signature with the release key (`--pub src/core/ota_key.h`: without it, it never asks), and offers it to every other X4 as it checks in. One X4 uploads a release at a time, in pieces, picking up where it stopped. |
 | **Updates** | Every signed `.bin` in `--updates` (default `roomiepet-data/updates`), plus, with `--github`, the X4 firmware attached to the newest release, checked hourly. An X4 on an older release downloads the newest in 16 KB pieces (picking up where it stopped), checks the signature and every byte as it does over the radio ([OTA.md](OTA.md)), and installs it once it's been idle (it doesn't sleep on USB). |
+
+## The radio and the WiFi at home
+
+The X4 has one radio. The device-to-device radio (ESP-NOW) and a WiFi connection must use the same channel, and a
+connected X4 can't change channel. So:
+
+| | Where | What happens |
+|---|---|---|
+| **Meet** (any Pets) | The meeting channel (1), everywhere | Meeting is in person and asked for, so it **takes precedence**: a home WiFi connection drops while Meet is open, and comes back after. Pets at the park, at work or at home always find each other, from any household. |
+| **Sync** (roommates) | The home WiFi's channel at home; the meeting channel elsewhere | Charging and connected at home: it **stays connected**, and the radio uses the WiFi's channel (the home server carries on beside it). Not connected: it goes to the channel of a household WiFi in range (a quick scan), else the meeting channel. Hearing nobody for 5 s, it looks on the other channels (1, 6 and 11 first, about a second each) and stays where it hears a roommate. A new roommate's X4, which doesn't know the home WiFi yet, still finds one that's connected. |
+| **The home server** | The home WiFi | Background only, while charging. It gives way to Meet and to the phone hotspot, and rides along with Sync. |
+
+The household mostly no longer needs the radio at home: the server keeps it in step. Sync is for handing over the
+household key, joining, and roommates who are out together.
 
 ### What keeps it safe
 
