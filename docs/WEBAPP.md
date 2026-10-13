@@ -2,7 +2,7 @@
 
 Manage a RoomiePet (an Xteink X4) from a browser: the household (chores, shopping, money, reminders, Pet messages,
 roommates), Cash App (your $cashtag, pay or share for each debt, paste a Cash App request), badges, the timetable
-and settings, and the **Pet designer** (dress-up with a live preview, what it holds, pronouns, a pride flag and a pin for either), and **Items**: adding things to hold, from Kenney's 1-Bit Pack or your own pictures, which the X4 passes on to other X4s ([ITEMS.md](ITEMS.md)). One app (`site/x4/`), two ways to reach the X4:
+and settings, and the **Pet designer** (dress-up with a live preview, what it holds, catalog clothes, pronouns, a pride flag and a pin for either), and **Items**: adding things to hold and wear, from Kenney's 1-Bit Pack, your own pictures or the piece editor (clothes drawn on the Pet), which the X4 passes on to other X4s ([ITEMS.md](ITEMS.md)). One app (`site/x4/`), two ways to reach the X4:
 
 | | On a phone (or any browser) | On a computer |
 |---|---|---|
@@ -44,8 +44,8 @@ when you leave the X4's hotspot.
 |---|---|
 | `H DUMP`, `H PUT <hex>`, `H SAVE`, `H START`, `H LEAVE` | The household (`src/apps/house/usb.h`) |
 | `G`, `G SET sleep <s>`, `G SET invert <0/1>` | Settings |
-| `I LIST`, `I ADD <name hex> <picture hex>`, `I DEL <id>` | Things to hold: the X4's catalog, adding one, removing one it was given ([ITEMS.md](ITEMS.md)) |
-| `P GET`, `P SET <look> <name hex> <pronouns hex> <flag> <held>`, `P PARTS` | The Pet's look (8 hex digits: 3 bits for the body, 4 for eyes and mouth, 5 for each of the rest, and the top bit for the pin), name and pronouns (`-` for none), and pride flag (2 hex digits: its number in `flags.h`, plus 80 when the pin shows it), and what it holds (an item id, 6 hex digits); every part with its rarity and whether this Pet has found it, then the Pet's EXP and how many gifts it has found |
+| `I LIST`, `I ADD <name hex> <kind> <shape> <top> <rows> <picture hex>`, `I DEL <id>` | Things to hold and wear: the X4's catalog, adding one, removing one it was given ([ITEMS.md](ITEMS.md)) |
+| `P GET`, `P SET <look> <name hex> <pronouns hex> <flag> <held> <hat> <accessory> <hair> <outfit>`, `P PARTS` | The Pet's look (8 hex digits: 3 bits for the body, 4 for eyes and mouth, 5 for each of the rest, and the top bit for the pin), name and pronouns (`-` for none), and pride flag (2 hex digits: its number in `flags.h`, plus 80 when the pin shows it), and what it holds and wears from the catalog (item ids, 6 hex digits each, 0 for nothing or the wardrobe's part); every part with its rarity and whether this Pet has found it, then the Pet's EXP and how many gifts it has found |
 | `T <unix>` | Set the clock from the phone or computer |
 | `L`, `B ...` + `D ...`, `BX <name>` | List, upload and delete badges |
 | `W GET`, `W <count> <crc32>` + lines | Read and replace the timetable |

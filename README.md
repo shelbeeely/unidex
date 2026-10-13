@@ -24,7 +24,7 @@ yet; what's next is in the [roadmap](docs/ROADMAP.md).
 | **Pets** | Your Pet is proud when you've done your chores, sulks when one is late, cheers your roommates on and passes on their news. Chores give it levels and, now and then, a gift. [More](docs/HOUSEHOLD.md#dress-up-pronouns-and-gifts) |
 | **Wardrobe** | Seven layers (body, eyes, mouth, hat, accessory, hair, outfit) and over 120 parts: 26 outfits, 18 hairstyles, 23 hats and 30 accessories, and a bunny lad. Dress up on the X4 (Pet, B) or with the web app's Pet designer. Everyday pieces are starters every Pet has; showy ones (halo, maid dress, lace dress, tiara...) are gifts. |
 | **Pronouns** | Set yours on the X4 or in the web app (a list, or anything up to 12 characters). They show beside your Pet's name, on its **pronoun pin** (a badge on its chest), on its name tag when it meets other Pets and in their friends lists, and on your household's Roommates. [More](docs/HOUSEHOLD.md#pronouns) |
-| **Things to hold** | A broom, a mop or a spray for the chores, food, treasure, a sword, a wand, a game pad: 81 things to hold, most from Kenney's free [1-Bit Pack](https://kenney.nl/assets/1-bit-pack). Add more from the web app (any of the pack's 1,078 pictures, or your own) without new firmware, and your X4 **passes them on over the radio** to every X4 it syncs with or meets. [More](docs/ITEMS.md) |
+| **Things to hold and wear** | A broom, a mop or a spray for the chores, food, treasure, a sword, a wand, a game pad (76 things to hold), and crowns, hats, ears, necklaces and clothes drawn to fit the Pet, worn instead of the wardrobe's: most from Kenney's free [1-Bit Pack](https://kenney.nl/assets/1-bit-pack). Add more from the web app (any of the pack's 1,078 pictures, your own, or hats, accessories, hair and outfits drawn in its piece editor) without new firmware, and your X4 **passes them on over the radio** to every X4 it syncs with or meets. [More](docs/ITEMS.md) |
 | **Pride flags** | Rainbow, progress, trans, nonbinary, bi, pan, lesbian, gay, ace, aro, aroace, genderfluid, genderqueer, agender and intersex. Your flag shows beside your Pet's name, on name tags and friends lists, on Roommates, and on a **flag pin** if you like. The X4 draws each colour as a black-and-white texture; the web app shows them in colour. [More](docs/HOUSEHOLD.md#pride-flags) |
 | **Gifts** | Nothing is bought or spent. Like loot from a game's NPC, a gift can drop after any chore: uncommon, rare or legendary, never a duplicate. The odds go up for a chore done on time, covering a roommate's turn, rescuing a late one, your first today and a streak of days, and a dry spell always ends with one. [More](docs/HOUSEHOLD.md#gifts) |
 | **Web app** | Manage the whole X4 from a browser: on a phone over the X4's own WiFi (House, *Manage on phone*), or on a computer over USB from the [website](https://forrest404.github.io/unidex/x4/). The household rules run in the browser as WebAssembly compiled from the device's own C++, so they can never disagree. [More](docs/WEBAPP.md) |
@@ -37,9 +37,9 @@ yet; what's next is in the [roadmap](docs/ROADMAP.md).
 </details>
 
 <details>
-<summary>The things to hold</summary>
+<summary>The things to hold and wear</summary>
 
-![81 things to hold, each in a Pet's hand: chore tools, food, treasure, adventure, magic and fun](docs/roomiepet-items.png)
+![88 things to hold and wear, on a Pet: chore tools, food, treasure, adventure, magic and fun in its hand; crowns, hats and ears; necklaces; a jumper](docs/roomiepet-items.png)
 
 </details>
 

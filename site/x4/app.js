@@ -8,7 +8,8 @@
 
 import { LAYERS as ART, DRAW_ORDER, BITS, PRONOUNS, FLAGS } from './pet-art.js';
 import { drawPin, drawFlag, cleanPronouns, ON_PIN, flagIndex } from './pin.js';
-import { drawHeld, bitsFromImage, bytesOf, hexOf } from './held.js';
+import { drawPetWorn, drawAlone, bitsFromImage, gridFromImage, gridFromPart, pieceFromGrid, itemOf as fromList, bytesOf, hexOf,
+  KINDS, ICON_KINDS, KIND_OF_LAYER, LAYER_OF, HAND, HAT, OUTFIT, ICON, PIECE } from './held.js';
 import { KENNEY } from './items.js';
 
 const $ = id => document.getElementById(id);
@@ -303,7 +304,7 @@ const VIEWS = {
     return `<h2>Roommates</h2>
       ${S.members.map(m => {
         const link = m.id !== S.me && payLink(m, 0, S.me);
-        return `<div class="card"><div class="row"><canvas class="mini" data-look="${m.look}" data-pronouns="${esc(m.pronouns || '')}" data-flag-byte="${m.flag || 0}" data-held="${m.held || 0}" width="96" height="96"></canvas>
+        return `<div class="card"><div class="row"><canvas class="mini" data-look="${m.look}" data-pronouns="${esc(m.pronouns || '')}" data-flag-byte="${m.flag || 0}" data-worn="${[m.held || 0, ...(m.wear || [])].join(',')}" width="96" height="96"></canvas>
           <div class="grow"><div class="title">${withPronouns(m.name, m.pronouns, m.flag)}${m.id === S.me ? ' · you' : ''}</div>
           <div class="sub">${m.tag ? '$' + esc(m.tag) : 'No $cashtag'} · ${m.balance > 0 ? 'owed ' + money(m.balance) : m.balance < 0 ? 'owes ' + money(-m.balance) : 'even'}</div></div>
           ${link ? `<a class="b cash" href="${esc(link.url)}">Cash App</a><button class="b" data-act="shareMember" data-id="${m.id}">Share</button>` : ''}</div></div>`;
@@ -367,32 +368,41 @@ const owned = (layer, index) => { const p = partInfo(layer, index); return !p ||
 const offered = layer => ART[layer].parts.map((_, i) => i).filter(i => owned(layer, i));
 // What's being designed: the parts, the pin, the name, the pronouns and the layer shown in the strip. Starts as what
 // the X4 wears; Load puts that back.
-// held: an item id (0: nothing); strip: a layer, or 'held' for the things to hold.
-const design = { parts: null, pin: false, name: '', pronouns: '', flag: 0, held: 0, strip: 6 };  // flag: the flag byte
+// worn: catalog item ids [held, hat, accessory, hair, outfit] (0: nothing in hand, or the wardrobe's part); strip: a
+// layer, or 'held' for the things to hold.
+const design = { parts: null, pin: false, name: '', pronouns: '', flag: 0, worn: [0, 0, 0, 0, 0], strip: 6 };  // flag: the flag byte
 const itemOf = id => info.items.find(i => i.id === id);
+const ofKind = k => info.items.filter(i => i.kind === k);
 function loadDesign() {
   design.parts = lookParts(info.pet.look).map((p, i) => (p < ART[i].parts.length ? p : 0));
   design.pin = lookPin(info.pet.look);
   design.name = info.pet.name || '';
   design.pronouns = info.pet.pronouns || '';
   design.flag = info.pet.flag || 0;
-  design.held = info.pet.held || 0;
+  design.worn = [...info.pet.worn];
 }
 const pinShows = () => (!design.pin ? 'off' : design.flag & ON_PIN ? 'flag' : 'pronouns');
 
-function drawPet(canvas, parts, pin, pronouns, flag = 0, held = 0) {
+// A clothes row's choices: the parts this Pet has for the layer, then the X4's catalog clothes of that kind.
+function choicesOf(layer) {
+  const k = KIND_OF_LAYER[layer], parts = offered(layer).map(i => ({ part: i }));
+  return k === undefined ? parts : parts.concat(ofKind(k).map(it => ({ id: it.id })));
+}
+function chosen(layer) {
+  const k = KIND_OF_LAYER[layer], id = k !== undefined && design.worn[k];
+  return id && itemOf(id)?.kind === k ? { id } : { part: design.parts[layer] };
+}
+const sameChoice = (a, b) => (a.id || b.id ? a.id === b.id : a.part === b.part);
+function choose(layer, c) {
+  const k = KIND_OF_LAYER[layer];
+  if (c.id) return (design.worn[k] = c.id);
+  design.parts[layer] = c.part;
+  if (k !== undefined) design.worn[k] = 0;
+}
+
+function drawPet(canvas, parts, pin, pronouns, flag = 0, worn = []) {
   const ctx = canvas.getContext('2d'), s = canvas.width / 32;
-  ctx.fillStyle = '#fff';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  for (const layer of DRAW_ORDER) {
-    const part = ART[layer].parts[parts[layer]] || ART[layer].parts[0];
-    part.rows.forEach((row, y) => [...row].forEach((c, x) => {
-      if (c === '.') return;
-      ctx.fillStyle = c === '#' ? '#111' : '#fff';
-      ctx.fillRect(x * s, y * s, s, s);
-    }));
-  }
-  if (held && itemOf(held)) drawHeld(ctx, itemOf(held).bits, s);
+  drawPetWorn(ctx, ART, DRAW_ORDER, parts, s, worn, itemOf);
   if (pin) drawPin(ctx, pronouns, s, flag);  // over what it holds, as on the X4
 }
 // Name with the pride flag before it and pronouns after it, as the X4 shows them: "[flag] Pip (she/her)".
@@ -403,28 +413,31 @@ function designer() {
   if (!design.parts) loadDesign();
   const d = design, level = 1 + Math.floor(info.exp / 50);
   const rows = ROWS.map(layer => {
-    const list = offered(layer), at = list.indexOf(d.parts[layer]), p = ART[layer].parts[d.parts[layer]];
-    const r = partInfo(layer, d.parts[layer])?.rarity;
+    const list = choicesOf(layer), c = chosen(layer), at = list.findIndex(x => sameChoice(x, c));
+    const it = c.id && itemOf(c.id), p = ART[layer].parts[d.parts[layer]];
+    const r = !it && partInfo(layer, d.parts[layer])?.rarity;
     return `<div class="petRow${layer === d.strip ? ' on' : ''}"><button class="b lab" data-act="pStrip" data-l="${layer}">${LAYERS[layer]}</button>
       <button class="b" data-act="pStep" data-l="${layer}" data-s="-1" aria-label="Previous ${LAYERS[layer]}">◀</button>
-      <span>${esc(p.name)}${r ? ` <i class="rar r${r}">${RARITY[r]}</i>` : ''}<small>${at + 1}/${list.length}</small></span>
+      <span>${esc(it ? it.name : p.name)}${it ? ' <i class="rar">catalog</i>' : r ? ` <i class="rar r${r}">${RARITY[r]}</i>` : ''}<small>${at + 1}/${list.length}</small></span>
       <button class="b" data-act="pStep" data-l="${layer}" data-s="1" aria-label="Next ${LAYERS[layer]}">▶</button></div>`;
   }).join('') + (() => {  // what it holds: nothing, then the X4's catalog (the Items tab adds to it)
-    const at = info.items.findIndex(i => i.id === d.held);
+    const hand = ofKind(HAND), at = hand.findIndex(i => i.id === d.worn[HAND]);
     return `<div class="petRow${d.strip === 'held' ? ' on' : ''}"><button class="b lab" data-act="pStrip" data-l="held">Holding</button>
       <button class="b" data-act="pHeld" data-s="-1" aria-label="Previous thing to hold">◀</button>
-      <span>${at < 0 ? 'Nothing' : esc(info.items[at].name)}<small>${at + 1}/${info.items.length}</small></span>
+      <span>${at < 0 ? 'Nothing' : esc(hand[at].name)}<small>${at + 1}/${hand.length}</small></span>
       <button class="b" data-act="pHeld" data-s="1" aria-label="Next thing to hold">▶</button></div>`;
   })();
-  const strip = d.strip === 'held' ? [{ id: 0, name: 'Nothing' }, ...info.items].map(it =>
-    `<button class="tile${it.id === d.held ? ' on' : ''}" data-act="pHold" data-id="${it.id}" title="${esc(it.name)}">
-      <canvas data-held-tile="${it.id}" width="64" height="64"></canvas><span>${esc(it.name)}</span></button>`).join('') :
+  const wornTile = (k, it) => `<button class="tile${it.id === d.worn[k] ? ' on' : ''}" data-act="pWorn" data-k="${k}" data-id="${it.id}" title="${esc(it.name)}">
+      <canvas data-worn-tile="${k}:${it.id}" width="64" height="64"></canvas><span>${esc(it.name)}</span>${it.id && k !== HAND ? '<i class="rar">catalog</i>' : ''}</button>`;
+  const stripKind = KIND_OF_LAYER[d.strip];
+  const strip = d.strip === 'held' ? [{ id: 0, name: 'Nothing' }, ...ofKind(HAND)].map(it => wornTile(HAND, it)).join('') :
     ART[d.strip].parts.map((p, i) => {
-    const r = partInfo(d.strip, i)?.rarity, has = owned(d.strip, i);
-    return `<button class="tile${i === d.parts[d.strip] ? ' on' : ''}${has ? '' : ' locked'}" data-act="pPick" data-l="${d.strip}" data-i="${i}"
+    const r = partInfo(d.strip, i)?.rarity, has = owned(d.strip, i), on = sameChoice(chosen(d.strip), { part: i });
+    return `<button class="tile${on ? ' on' : ''}${has ? '' : ' locked'}" data-act="pPick" data-l="${d.strip}" data-i="${i}"
       ${has ? '' : 'disabled'} title="${esc(p.name)}${r ? ' (' + RARITY[r] + (has ? '' : ', not found yet') + ')' : ''}"><canvas data-tile="${i}" width="64" height="64"></canvas>
       <span>${esc(p.name)}</span>${r ? `<i class="rar r${r}">${has ? RARITY[r] : 'not found yet'}</i>` : ''}</button>`;
-  }).join('');
+  }).join('') + (stripKind === undefined ? '' : ofKind(stripKind).map(it => wornTile(stripKind, it)).join(''));
+  const catalogNote = n => ` <span class="sub">(${n} from the catalog: more on the <a href="#" data-tab="items">Items</a> tab)</span>`;
   const preset = PRONOUNS.includes(d.pronouns) || !d.pronouns;
   return `<h2>Your Pet</h2>
     <p class="note">Dress it up and send it to the X4. Level ${level} · ${info.gifts} of ${info.giftsAll} gifts
@@ -447,89 +460,171 @@ function designer() {
     <p class="note">Your pronouns and flag show beside your Pet's name on the X4, to Pets you meet and in their friends
       lists, and on your household's Roommates; a pin shows one of them on your Pet too. The X4 draws flags in black and
       white, each colour a texture.</p>
-    <h3>${d.strip === 'held' ? `Things to hold <span class="sub">(${info.items.length}: more on the <a href="#" data-tab="items">Items</a> tab)</span>` : LAYERS[d.strip]}</h3>
+    <h3>${d.strip === 'held' ? 'Things to hold' + catalogNote(ofKind(HAND).length) :
+      LAYERS[d.strip] + (stripKind === undefined ? '' : catalogNote(ofKind(stripKind).length))}</h3>
     <div class="strip">${strip}</div>`;
 }
 
-// ---- The Items tab: the things this X4's Pet can hold, and adding more, from Kenney's 1-Bit Pack (kenney.png, every
-// tile; tap one) or any picture. "I ADD" puts it on the X4, which passes it on to every X4 it syncs with or meets.
-const adding = { kenney: null, own: null };  // the picture picked for each form (32 bytes), and its tile number
+// ---- The Items tab: the things this X4's Pet can hold and wear (the catalog), and adding more: from Kenney's 1-Bit
+// Pack (kenney.png, every tile; tap one) or any picture, held, on the head or at the neck; or clothes drawn to fit the
+// Pet (a hat, an accessory, hair or an outfit), in the piece editor. "I ADD" puts it on the X4, which passes it on to
+// every X4 it syncs with or meets.
+const adding = { kenney: null, own: null };  // the picture picked for each form (32 bytes)
+const piece = { kind: OUTFIT, grid: new Uint8Array(32 * 32), brush: 1 };  // the piece editor: 0 clear, 1 ink, 2 paper
+const kindSelect = (kinds, at) => `<label>Goes<select name="kind">${kinds.map(k =>
+  `<option value="${k}"${k === at ? ' selected' : ''}>${k === HAND ? 'In the hand' : k === HAT ? 'On the head' : k === 2 ? 'At the neck' : KINDS[k]}</option>`).join('')}</select></label>`;
 function itemsPage() {
   const added = info.items.filter(i => i.added).length;
-  return `<h2>Things to hold</h2>
+  return `<h2>Things to hold and wear</h2>
     <p class="note">This X4 has ${info.items.length}: ${info.items.length - added} from its firmware and ${added} added. What
       you add goes to the X4 straight away, and from there to every X4 it syncs with or meets (one radio message each),
-      so your roommates get it too.</p>
+      so your roommates get it too. Dress your Pet in them on the <a href="#" data-tab="pet">Pet</a> tab.</p>
     <div class="card"><div class="title">Add from Kenney's 1-Bit Pack</div>
-      <p class="note">${KENNEY.count} free pixel pictures (CC0, <a href="https://kenney.nl/assets/1-bit-pack">kenney.nl</a>). Tap one, name it, add it.</p>
+      <p class="note">${KENNEY.count} free pixel pictures (CC0, <a href="https://kenney.nl/assets/1-bit-pack">kenney.nl</a>). Tap one, say where it goes, name it, add it.</p>
       <div class="kenney"><img id="kenneySheet" src="kenney.png" alt="Kenney's 1-Bit Pack: tap a picture" draggable="false"></div>
       <form class="add" data-form="addKenney"><canvas id="kenneyPick" class="mini" width="64" height="64"></canvas>
+        ${kindSelect(ICON_KINDS, HAND)}
         <label>Name<input name="name" maxlength="12" required placeholder="${adding.kenney ? '' : 'Tap a picture first'}"></label>
         <button class="b p">Add to the X4</button></form></div>
     <div class="card"><div class="title">Add your own picture</div>
       <p class="note">Any picture: it's cropped to what's drawn, shrunk to 16 x 16 and made black and white (transparent
         or white is paper). Simple shapes with thick lines work best.</p>
       <form class="add" data-form="addOwn"><input type="file" accept="image/*" id="ownFile" aria-label="Picture">
-        <canvas id="ownPick" class="mini" width="64" height="64"></canvas>
+        <canvas id="ownPick" class="mini" width="64" height="64"></canvas>${kindSelect(ICON_KINDS, HAND)}
         <label>Name<input name="name" maxlength="12" required></label><button class="b p">Add to the X4</button></form></div>
-    <h3>On this X4</h3>
-    <div class="strip">${info.items.map(it => `<div class="tile"><canvas data-item="${it.id}" width="64" height="64"></canvas>
-      <span>${esc(it.name)}</span>${it.added ? `<button class="b" data-act="itemDel" data-id="${it.id}">Remove</button>` : ''}</div>`).join('')}</div>`;
+    <div class="card"><div class="title">Draw clothes</div>
+      <p class="note">A hat, an accessory, hair or an outfit drawn on the Pet itself, worn instead of the wardrobe's.
+        Tap or drag to draw: ink is black, paper is white (it covers what's under it) and clear lets the Pet show
+        through. Or start from what your Pet wears, or from a picture drawn at 32 x 32 (dark is ink, light is paper,
+        transparent is clear).</p>
+      <div class="pieceEd"><canvas id="pieceEd" width="320" height="320" aria-label="Piece editor"></canvas>
+        <div class="tools">${[[1, 'Ink'], [2, 'Paper'], [0, 'Clear']].map(([v, n]) =>
+          `<button class="b${piece.brush === v ? ' p' : ''}" data-act="pieceBrush" data-v="${v}">${n}</button>`).join('')}
+          <button class="b" data-act="pieceFrom">Start from what it wears</button>
+          <button class="b" data-act="pieceClear">Start again</button>
+          <label class="b">Picture<input type="file" accept="image/*" id="pieceFile" hidden></label></div></div>
+      <form class="add" data-form="addPiece"><label>Kind<select name="kind" id="pieceKind">${[HAT, 2, 3, OUTFIT].map(k =>
+        `<option value="${k}"${k === piece.kind ? ' selected' : ''}>${KINDS[k]}</option>`).join('')}</select></label>
+        <label>Name<input name="name" maxlength="12" required></label><button class="b p">Add to the X4</button></form></div>
+    ${KINDS.map((_, k) => {
+      const list = ofKind(k);
+      return list.length ? `<h3>${['Things to hold', 'Hats', 'Accessories', 'Hair', 'Outfits'][k]} <span class="sub">${list.length}</span></h3>
+        <div class="strip">${list.map(it => `<div class="tile"><canvas data-item="${it.id}" width="64" height="64"></canvas>
+        <span>${esc(it.name)}</span>${it.added ? `<button class="b" data-act="itemDel" data-id="${it.id}">Remove</button>` : ''}</div>`).join('')}</div>` : '';
+    }).join('')}`;
 }
-function paintPick(id, bits) {
+// A picked picture, worn by the designer's Pet where the form says it goes.
+function paintPick(id) {
   const c = $(id);
   if (!c) return;
-  const g = c.getContext('2d');
-  g.fillStyle = '#fff', g.fillRect(0, 0, c.width, c.height);
-  if (bits) drawHeld(g, bits, c.width / 16, true);
+  const bits = adding[id === 'kenneyPick' ? 'kenney' : 'own'], kind = +(c.closest('form')?.kind?.value || 0);
+  const it = bits && { id: -1, kind, shape: ICON, top: 0, rows: 16, data: bits };
+  if (!design.parts) loadDesign();
+  const worn = [0, 0, 0, 0, 0];
+  if (it) worn[kind] = -1;
+  drawPetWorn(c.getContext('2d'), ART, DRAW_ORDER, design.parts, c.width / 32, worn, id => (id === -1 ? it : itemOf(id)));
 }
+// The piece editor: the designer's Pet faintly under the piece (without the layer the piece takes the place of).
+function paintPiece() {
+  const c = $('pieceEd');
+  if (!c) return;
+  if (!design.parts) loadDesign();
+  const g = c.getContext('2d'), s = c.width / 32, worn = [...design.worn];
+  worn[piece.kind] = 0;
+  const parts = [...design.parts];
+  const under = document.createElement('canvas');
+  under.width = under.height = c.width;
+  const order = DRAW_ORDER.filter(l => l !== LAYER_OF[piece.kind]);
+  drawPetWorn(under.getContext('2d'), ART, order, parts, s, worn, itemOf);
+  g.fillStyle = '#fff', g.fillRect(0, 0, c.width, c.height);
+  g.globalAlpha = 0.25, g.drawImage(under, 0, 0), g.globalAlpha = 1;
+  for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) {
+    const v = piece.grid[y * 32 + x];
+    if (!v) continue;
+    g.fillStyle = v === 1 ? '#111' : '#fff';
+    g.fillRect(x * s, y * s, s, s);
+    if (v === 2) g.strokeStyle = '#ccc', g.strokeRect(x * s + 0.5, y * s + 0.5, s - 1, s - 1);
+  }
+  g.strokeStyle = 'rgba(0,0,0,.06)';
+  for (let i = 1; i < 32; i++) g.beginPath(), g.moveTo(i * s, 0), g.lineTo(i * s, c.height), g.moveTo(0, i * s), g.lineTo(c.width, i * s), g.stroke();
+}
+let painting = false;
+function paintAt(e) {
+  const c = $('pieceEd'), r = c.getBoundingClientRect();
+  const x = Math.floor((e.clientX - r.left) / r.width * 32), y = Math.floor((e.clientY - r.top) / r.height * 32);
+  if (x < 0 || y < 0 || x > 31 || y > 31 || piece.grid[y * 32 + x] === piece.brush) return;
+  piece.grid[y * 32 + x] = piece.brush;
+  paintPiece();
+}
+document.addEventListener('pointerdown', e => {
+  if (e.target.id !== 'pieceEd') return;
+  painting = true;
+  e.target.setPointerCapture(e.pointerId);
+  paintAt(e);
+});
+document.addEventListener('pointermove', e => { if (painting && e.target.id === 'pieceEd') paintAt(e); });
+document.addEventListener('pointerup', () => { painting = false; });
 document.addEventListener('click', e => {
   if (e.target.id !== 'kenneySheet') return;
   const img = e.target, r = img.getBoundingClientRect();
   const col = Math.floor((e.clientX - r.left) / r.width * img.naturalWidth / KENNEY.tile);
   const row = Math.floor((e.clientY - r.top) / r.height * img.naturalHeight / KENNEY.tile);
   adding.kenney = bitsFromImage(img, { whiteIsInk: true, sx: col * KENNEY.tile, sy: row * KENNEY.tile, sw: KENNEY.tile, sh: KENNEY.tile });
-  paintPick('kenneyPick', adding.kenney);
+  paintPick('kenneyPick');
   const name = document.querySelector('form[data-form=addKenney] [name=name]');
   name.placeholder = 'Name it', name.focus();
 });
 document.addEventListener('change', e => {
-  if (e.target.id !== 'ownFile' || !e.target.files[0]) return;
+  const t = e.target;
+  if (t.name === 'kind' && t.form?.dataset.form === 'addKenney') paintPick('kenneyPick');
+  if (t.name === 'kind' && t.form?.dataset.form === 'addOwn') paintPick('ownPick');
+  if (t.id === 'pieceKind') { piece.kind = +t.value; paintPiece(); }
+  if ((t.id !== 'ownFile' && t.id !== 'pieceFile') || !t.files[0]) return;
   const img = new Image();
-  img.onload = () => { adding.own = bitsFromImage(img); paintPick('ownPick', adding.own); URL.revokeObjectURL(img.src); };
-  img.src = URL.createObjectURL(e.target.files[0]);
+  img.onload = () => {
+    if (t.id === 'ownFile') adding.own = bitsFromImage(img), paintPick('ownPick');
+    else piece.grid = gridFromImage(img), paintPiece();
+    URL.revokeObjectURL(img.src);
+  };
+  img.src = URL.createObjectURL(t.files[0]);
 });
-async function addItem(name, bits) {
+async function addItem(name, kind, shape, top, rows, data) {
   name = name.replace(/[^\x20-\x7e]/g, '').trim().slice(0, 12);
-  if (!bits || !bits.some(b => b)) return toast('Pick a picture first');
+  if (!data || !data.some(b => b)) return toast(shape === ICON ? 'Pick a picture first' : 'Draw it first');
   if (!name) return toast('Give it a name');
-  ok(await run(`I ADD ${toHex(enc.encode(name))} ${hexOf(bits)}`), 'OK I ADD');
+  ok(await run(`I ADD ${toHex(enc.encode(name))} ${kind} ${shape} ${top} ${rows} ${hexOf(data)}`), 'OK I ADD');
   await readExtras();
   render();
   toast(`${name} added: your roommates get it at the next Sync`);
+}
+function addPiece(name) {
+  const p = pieceFromGrid(piece.grid);
+  if (!p) return toast(piece.grid.some(v => v) ? 'Too tall: keep it within 27 rows' : 'Draw it first');
+  return addItem(name, piece.kind, PIECE, p.top, p.rows, p.data);
 }
 
 // Every Pet on the page: the designer's preview and strip, and the roommates' Pets (canvas[data-look]).
 function paintPets() {
   const c = $('petPreview');
-  if (c) drawPet(c, design.parts, design.pin, design.pronouns, design.flag, design.held);
-  document.querySelectorAll('canvas[data-held-tile]').forEach(t => drawPet(t, design.parts, false, '', 0, +t.dataset.heldTile));
-  document.querySelectorAll('canvas[data-item]').forEach(t => {
-    const g = t.getContext('2d');
-    g.fillStyle = '#fff', g.fillRect(0, 0, t.width, t.height);
-    const it = itemOf(+t.dataset.item);
-    if (it) drawHeld(g, it.bits, t.width / 16, true);
+  if (c) drawPet(c, design.parts, design.pin, design.pronouns, design.flag, design.worn);
+  document.querySelectorAll('canvas[data-worn-tile]').forEach(t => {
+    const [k, id] = t.dataset.wornTile.split(':').map(Number), worn = [...design.worn];
+    worn[k] = id;
+    drawPet(t, design.parts, false, '', 0, worn);
   });
+  document.querySelectorAll('canvas[data-item]').forEach(t => drawAlone(t.getContext('2d'), itemOf(+t.dataset.item), t.width));
   document.querySelectorAll('canvas[data-tile]').forEach(t => {
-    const parts = [...design.parts];
+    const parts = [...design.parts], worn = [...design.worn];
     parts[design.strip] = +t.dataset.tile;
-    drawPet(t, parts, false, '');
+    if (KIND_OF_LAYER[design.strip] !== undefined) worn[KIND_OF_LAYER[design.strip]] = 0;
+    drawPet(t, parts, false, '', 0, worn);
   });
   document.querySelectorAll('canvas[data-look]').forEach(t => {
     const hex = (+t.dataset.look >>> 0).toString(16);
-    drawPet(t, lookParts(hex), lookPin(hex), t.dataset.pronouns || '', +t.dataset.flagByte || 0, +t.dataset.held || 0);
+    drawPet(t, lookParts(hex), lookPin(hex), t.dataset.pronouns || '', +t.dataset.flagByte || 0, (t.dataset.worn || '').split(',').map(Number));
   });
   document.querySelectorAll('canvas[data-flag]').forEach(t => drawFlag(t.getContext('2d'), +t.dataset.flag, 0, 0, t.width, t.height));
+  paintPick('kenneyPick'), paintPick('ownPick'), paintPiece();
 }
 document.addEventListener('input', e => {
   if (e.target.id === 'petName') design.name = e.target.value;
@@ -553,12 +648,26 @@ document.addEventListener('change', e => {
 
 const PET_ACTIONS = {
   pStep: d => {
-    const layer = +d.l, list = offered(layer);
-    const at = list.indexOf(design.parts[layer]);
-    design.parts[layer] = list[((at < 0 ? 0 : at + +d.s) + list.length) % list.length];
+    const layer = +d.l, list = choicesOf(layer), c = chosen(layer);
+    const at = list.findIndex(x => sameChoice(x, c));
+    choose(layer, list[((at < 0 ? 0 : at + +d.s) + list.length) % list.length]);
     design.strip = layer;
   },
-  pPick: d => { design.parts[+d.l] = +d.i; },
+  pPick: d => choose(+d.l, { part: +d.i }),
+  pWorn: d => { design.worn[+d.k] = +d.id; },
+  pieceBrush: d => { piece.brush = +d.v; },
+  pieceClear: () => { piece.grid = new Uint8Array(32 * 32); },
+  pieceFrom: () => {  // what the designer's Pet wears for this kind: its catalog piece, or the wardrobe's part
+    if (!design.parts) loadDesign();
+    const it = itemOf(design.worn[piece.kind]), grid = new Uint8Array(32 * 32);
+    if (it && it.shape === PIECE) {
+      for (let y = 0; y < it.rows; y++) for (let x = 0; x < 32; x++) grid[(it.top + y) * 32 + x] = (it.data[y * 8 + (x >> 2)] >> (6 - 2 * (x & 3))) & 3;
+      piece.grid = grid;
+    } else {
+      const layer = LAYER_OF[piece.kind];
+      piece.grid = gridFromPart(ART[layer].parts[design.parts[layer]]);
+    }
+  },
   itemDel: async d => {
     if (!confirm('Remove it from this X4? (X4s it was passed on to keep theirs.)')) return;
     ok(await run('I DEL ' + (+d.id).toString(16)), 'OK I DEL');
@@ -566,23 +675,25 @@ const PET_ACTIONS = {
   },
   pStrip: d => { design.strip = d.l === 'held' ? 'held' : +d.l; },
   pHeld: d => {
-    const ids = [0, ...info.items.map(i => i.id)], at = Math.max(0, ids.indexOf(design.held));
-    design.held = ids[(at + +d.s + ids.length) % ids.length];
+    const ids = [0, ...ofKind(HAND).map(i => i.id)], at = Math.max(0, ids.indexOf(design.worn[HAND]));
+    design.worn[HAND] = ids[(at + +d.s + ids.length) % ids.length];
     design.strip = 'held';
   },
-  pHold: d => { design.held = +d.id; },
   pRandom: () => {
-    design.parts = design.parts.map((_, layer) => { const l = offered(layer); return l[Math.floor(Math.random() * l.length)]; });
-    const ids = [0, ...info.items.map(i => i.id)];
-    design.held = ids[Math.floor(Math.random() * ids.length)];
+    const pick = l => l[Math.floor(Math.random() * l.length)];
+    design.parts = design.parts.map((_, layer) => pick(offered(layer)));
+    design.worn = KINDS.map((_, k) => {  // something to hold, or not; now and then catalog clothes
+      const ids = ofKind(k).map(i => i.id);
+      return k === HAND ? pick([0, ...ids]) : Math.random() < 0.25 && ids.length ? pick(ids) : 0;
+    });
   },
   pLoad: async () => { await readExtras(); loadDesign(); toast('Loaded what your Pet is wearing'); },
   pWear: async () => {
     const name = design.name.replace(/[^\x20-\x7e]/g, '').trim().slice(0, 12), pr = cleanPronouns(design.pronouns);
     const hex = t => (t ? toHex(enc.encode(t)) : '-');
     const flag = (flagIndex(design.flag) ? design.flag : 0).toString(16).padStart(2, '0');
-    const held = (itemOf(design.held) ? design.held : 0).toString(16).padStart(6, '0');
-    ok(await run(`P SET ${lookHex(design.parts, design.pin)} ${hex(name)} ${hex(pr)} ${flag} ${held}`), 'OK P SET');
+    const worn = design.worn.map((id, k) => (itemOf(id)?.kind === k ? id : 0).toString(16).padStart(6, '0')).join(' ');
+    ok(await run(`P SET ${lookHex(design.parts, design.pin)} ${hex(name)} ${hex(pr)} ${flag} ${worn}`), 'OK P SET');
     await readExtras();
     await readHouse();  // its member card (name, look, pronouns), as roommates will see it
     loadDesign();
@@ -687,8 +798,9 @@ function saveTimetableEdits() {
 }
 
 const FORMS = {
-  addKenney: f => addItem(f.name.value, adding.kenney),
-  addOwn: f => addItem(f.name.value, adding.own),
+  addKenney: f => addItem(f.name.value, +f.kind.value, ICON, 0, 16, adding.kenney),
+  addOwn: f => addItem(f.name.value, +f.kind.value, ICON, 0, 16, adding.own),
+  addPiece: f => addPiece(f.name.value),
   chore: f => change(() => (putText(f.text.value.trim()), wasm.add_chore(+f.every.value, dayOf(f.due.value))), 'Chore added'),
   item: f => change(() => (putText(f.text.value.trim()), wasm.add_item()), 'On the list'),
   expense: f => {
@@ -756,8 +868,9 @@ async function badgeFrom(file, style, light) {
 async function readExtras() {
   const r = await run('G', 'P GET', 'P PARTS', 'I LIST', 'L', 'W GET');
   info.items = r.filter(l => l.startsWith('IT ')).map(l => {
-    const [, id, name, bits, added] = l.split(' ');
-    return { id: parseInt(id, 16), name: fromHex(name), bits: bytesOf(bits), added: added === '1' };
+    const [, id, name, kind, shape, top, rows, data, added] = l.split(' ');
+    return fromList({ id: parseInt(id, 16), name: fromHex(name), kind: +kind, shape: +shape, top: +top, rows: +rows, data,
+      added: added === '1' });
   });
   info.parts = r.filter(l => l.startsWith('PP ')).map(l => {
     const [, layer, index, rarity, has, name] = l.split(' ');
@@ -769,7 +882,7 @@ async function readExtras() {
   info.settings = Object.fromEntries((g ? g.slice(5) : '').split(' ').map(kv => kv.split('=')));
   const p = (reply(r, 'OK P ') || 'OK P 0 ').split(' ');
   info.pet = { look: p[2], name: fromHex(p[3] || ''), pronouns: fromHex(p[4] || ''), flag: parseInt(p[5] || '0', 16) || 0,
-    held: parseInt(p[6] || '0', 16) || 0 };
+    worn: [6, 7, 8, 9, 10].map(i => parseInt(p[i] || '0', 16) || 0) };
   info.badges = r.filter(l => l.startsWith('F ')).map(l => l.slice(2));
   info.timetable = r.filter(l => l.startsWith('WL ')).map(l => l.slice(3).split(',').slice(0, 5));
 }

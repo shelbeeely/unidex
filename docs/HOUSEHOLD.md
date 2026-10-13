@@ -115,6 +115,13 @@ The X4's screen is black and white, so each colour becomes a texture as dark as 
 a checker, diagonal lines, a dense grid, solid), and two stripes next to each other never get the same one; the
 intersex flag is its ring on plain paper. The web app and the website show the flags in colour.
 
+### Things to hold and wear
+
+What a Pet holds and the catalog clothes it wears ([ITEMS.md](ITEMS.md)) show on every roommate's X4 and in the web
+app too: what it holds rides on the member card (d, above the flag), and its catalog hat, accessory, hair and outfit
+on a record of their own (`WEAR`), which, like a $cashtag, only its owner's device can change. A roommate's X4 that
+doesn't have one of those items yet shows the wardrobe's part until the item reaches it (it comes at the same Sync).
+
 ### Gifts
 
 Nothing is bought or spent. Like loot from a game's NPC, a gift can drop each time your Pet does a chore (on the X4

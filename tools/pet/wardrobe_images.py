@@ -15,25 +15,39 @@ LAYERS, ORDER, EXAMPLES, DROPS, RARITIES = (const("LAYERS"), const("DRAW_ORDER")
 GLYPHS, CHARS = const("PIN_GLYPHS"), const("PIN_CHARS")
 FLAGS, CHEVRON, RING = const("FLAGS"), const("FLAG_CHEVRON"), const("FLAG_RING")
 ITEMS = json.loads(re.search(r"export const ITEMS = (.*?);\n", open(os.path.join(root, "site/x4/items.js")).read()).group(1))
-ITEM_BITS = {i["name"]: bytes.fromhex(i["bits"]) for i in ITEMS}
+BY_NAME = {i["name"]: i for i in ITEMS}
+LAYER_OF = [None, 3, 4, 5, 6]  # items_logic.h's layerOf: the wardrobe layer a kind of clothes takes the place of
 
-def held(img, name, scale):
-    """What a Pet holds, as items_logic.h's drawHeld: x 16-31, y 16-31, a paper edge round the ink."""
-    bits = ITEM_BITS.get(name)
-    if not bits:
+def item(img, it, scale):
+    """A catalog item on a Pet, as items_logic.h's drawItem: an icon placed by its kind with a paper edge round the
+    ink (in the hand x 16-31, y 16-31; a hat's lowest ink at row 9; an accessory's highest at row 23), or a piece
+    on the Pet's own grid (2 bits a pixel: 0 see-through, 1 ink, 2 paper)."""
+    if not it:
         return
-    d = ImageDraw.Draw(img)
-    ink = lambda x, y: 0 <= x < 16 and 0 <= y < 16 and bits[y * 2 + x // 8] >> (7 - x % 8) & 1
+    data, d = bytes.fromhex(it["data"]), ImageDraw.Draw(img)
+    dot = lambda x, y, k: d.rectangle([x * scale, y * scale, x * scale + scale - 1, y * scale + scale - 1], fill=INK if k else PAPER)
+    if it["shape"] == 1:
+        for y in range(it["rows"]):
+            for x in range(32):
+                c = data[y * 8 + x // 4] >> (6 - 2 * (x % 4)) & 3
+                if c:
+                    dot(x, it["top"] + y, c == 1)
+        return
+    ink = lambda x, y: 0 <= x < 16 and 0 <= y < 16 and data[y * 2 + x // 8] >> (7 - x % 8) & 1
+    rows = [y for y in range(16) if any(ink(x, y) for x in range(16))] or [0]
+    x0, y0 = (16, 16) if it["kind"] == 0 else (8, 9 - rows[-1] if it["kind"] == 1 else 23 - rows[0])
     for y in range(-1, 17):
         for x in range(-1, 17):
-            px, py = 16 + x, 16 + y
+            px, py = x0 + x, y0 + y
             if not (0 <= px < 32 and 0 <= py < 32):
                 continue
             here = ink(x, y)
-            near = any(ink(x + dx, y + dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1))
-            if here or near:
-                d.rectangle([px * scale, py * scale, px * scale + scale - 1, py * scale + scale - 1],
-                            fill=INK if here else PAPER)
+            if here or any(ink(x + dx, y + dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1)):
+                dot(px, py, here)
+
+def held(img, name, scale):
+    """What a Pet holds (a catalog item by name)."""
+    item(img, BY_NAME.get(name), scale)
 
 def flag_colour(f, x, y, w, h):
     """flags.h's colourAt."""
@@ -61,12 +75,15 @@ font_path = os.path.join(root, "tools/fonts/LiberationSans-Bold.ttf")
 font = lambda size: ImageFont.truetype(font_path, size)
 INK, PAPER, MUTED = (17, 17, 17), (255, 255, 255), (110, 110, 110)
 
-def pet(look, scale, only=None):
-    """The Pet (or one layer of it, on the plain blob) as an image."""
+def pet(look, scale, only=None, wear=None):
+    """The Pet (or one layer of it, on the plain blob) as an image; wear: a catalog item worn in place of its layer."""
     img = Image.new("RGB", (32 * scale, 32 * scale), PAPER)
     d = ImageDraw.Draw(img)
     for layer in ORDER:
         if only is not None and layer not in (0, only):
+            continue
+        if wear and LAYER_OF[wear["kind"]] == layer:
+            item(img, wear, scale)
             continue
         rows = LAYERS[layer]["parts"][look[layer]]["rows"]
         for y, row in enumerate(rows):
@@ -154,7 +171,7 @@ for i, fl in enumerate(FLAGS[1:]):
     tw = d.textlength(fl["name"], font=font(18))
     d.text((x + (fw - tw) / 2, y + fh + 5), fl["name"], fill=INK, font=font(18))
 img.save(os.path.join(root, "docs/roomiepet-flags.png"), optimize=True)
-# The things to hold, each in a Pet's hand, named.
+# The things to hold and wear, each held or worn by a plain Pet, named.
 scale, pad, cell, name_h, cols = 3, 10, 96, 22, 12
 rows = -(-len(ITEMS) // cols)
 img = Image.new("RGB", (pad + cols * (cell + pad), pad + rows * (cell + name_h + pad)), PAPER)
@@ -163,8 +180,9 @@ for i, it in enumerate(ITEMS):
     x, y = pad + i % cols * (cell + pad), pad + i // cols * (cell + name_h + pad)
     look = list(DEFAULT)
     look[4] = 0
-    p = pet(look, scale).convert("RGB")
-    held(p, it["name"], scale)
+    p = pet(look, scale, wear=it if it["kind"] else None).convert("RGB")
+    if not it["kind"]:
+        item(p, it, scale)
     img.paste(p, (x, y))
     tw = d.textlength(it["name"], font=font(13))
     d.text((x + (cell - tw) / 2, y + cell + 3), it["name"], fill=INK, font=font(13))

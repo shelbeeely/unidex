@@ -137,7 +137,7 @@ disappears while it sleeps.
   `python3 tools/pet/wardrobe_images.py` to redraw the README's example Pets and wardrobe pictures. New parts go after the old ones (the
   Waveshare board keeps only the parts it shipped with, `WAVESHARE_PARTS` in `pet_logic.h`); the example Pets are
   `EXAMPLES` in `tools/pet/export.py`. Pronouns and the pronoun pin's 3x5 letters are `src/apps/pet/pronouns.h`,
-  things to hold `catalog/items.txt` (one line each, then `python3 tools/items/build.py`: [ITEMS.md](ITEMS.md)),
+  things to hold and wear `catalog/items.txt` (one line each, then `python3 tools/items/build.py`: [ITEMS.md](ITEMS.md)),
   pride flags `src/apps/pet/flags.h` (their colours, and the textures the X4 draws them with); `site/x4/pin.js`
   draws the same pins and flags in the browser, from what `export.py` copies into `pet-art.js`. The website's RoomiePet
   page (`site/index.html`, the home page) draws from `site/x4/pet-art.js` by itself.
